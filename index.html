@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AMI Integração — Cadastro de Membros</title>
+<link rel="icon" type="image/png" href="assets/ami-bg.png">
+<link rel="apple-touch-icon" href="assets/ami-bg.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Caveat:wght@600;700&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="system-bg" aria-hidden="true"></div>
+
+<!-- ══════════ LOGIN ══════════ -->
+<section id="login-screen" class="login-screen">
+  <div class="login-bg" aria-hidden="true"></div>
+  <div class="login-veil" aria-hidden="true"></div>
+  <div class="login-embers" aria-hidden="true"></div>
+
+  <div class="login-content">
+    <div class="login-brand rise" style="--d:.05s">
+      <span class="brand-script">ami</span>
+      <span class="brand-tag">Uma igreja que <b>AMA</b> e se <b>MOVIMENTA!</b></span>
+    </div>
+    <h1 class="login-title rise" style="--d:.15s">INTEGRAÇÃO</h1>
+    <p class="login-sub rise" style="--d:.25s">Juntos por um servir ainda mais forte!</p>
+
+    <div class="login-card rise" style="--d:.4s">
+      <div class="login-card-glow" aria-hidden="true"></div>
+      <h2>Cadastro de Membros</h2>
+      <p class="login-units">
+        <span class="unit-pill"><i class="dot dot-pacheco"></i>AMI Pacheco</span>
+        <span class="unit-pill"><i class="dot dot-amendoeira"></i>AMI Amendoeira</span>
+      </p>
+      <p class="login-hint">Entre com o seu próprio e-mail e senha cadastrados pelo administrador.</p>
+      <p id="login-error" class="login-error" hidden></p>
+      <form id="login-form" class="login-form" novalidate>
+        <label>E-mail
+          <input id="login-email" type="email" autocomplete="username" placeholder="voce@email.com" required>
+        </label>
+        <label>Senha
+          <input id="login-pass" type="password" autocomplete="current-password" placeholder="Sua senha" required>
+        </label>
+        <label id="login-pass2-row" hidden>Confirme a senha
+          <input id="login-pass2" type="password" autocomplete="new-password" placeholder="Repita a senha">
+        </label>
+        <button id="btn-login" class="btn btn-primary login-submit" type="submit">
+          <span>Entrar</span>
+        </button>
+      </form>
+      <p id="login-note" class="login-note">Acesso restrito a contas autorizadas pelo administrador.</p>
+    </div>
+    <p class="login-foot rise" style="--d:.55s">AMI Pacheco &nbsp•&nbsp; AMI Amendoeira — São Gonçalo, RJ</p>
+  </div>
+</section>
+
+<!-- ══════════ APP ══════════ -->
+<div id="app" class="app" hidden>
+  <aside class="sidebar">
+    <div class="side-brand">
+      <img class="side-brand-img" src="assets/ami-bg.png" alt="AMI Integração — Uma igreja que AMA e se MOVIMENTA!">
+    </div>
+    <nav class="side-nav" aria-label="Navegação principal">
+      <button class="side-link" data-nav="dashboard" type="button">
+        <svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>
+        <span>Painel</span>
+      </button>
+      <button class="side-link" data-nav="members" type="button">
+        <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 3-1.34 3-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
+        <span>Membros</span>
+        <em id="nav-count" class="nav-count">0</em>
+      </button>
+      <button class="side-link" data-nav="birthdays" type="button">
+        <svg viewBox="0 0 24 24"><path d="M12 6c1.11 0 2-.9 2-2 0-.38-.1-.73-.29-1.03L12 0l-1.71 2.97c-.19.3-.29.65-.29 1.03 0 1.1.9 2 2 2zm4.6 9.99l-1.07-1.07-1.08 1.07c-1.3 1.3-3.58 1.31-4.89 0l-1.07-1.07-1.09 1.07C6.75 16.64 5.88 17 4.96 17c-.73 0-1.4-.23-1.96-.61V21c0 .55.45 1 1 1h16c.55 0 1-.45 1-1v-4.61c-.56.38-1.23.61-1.96.61-.92 0-1.79-.36-2.44-1.01zM18 9h-5V7h-2v2H6c-1.66 0-3 1.34-3 3v1.54c0 1.08.88 1.96 1.96 1.96.52 0 1.02-.2 1.38-.57l2.14-2.13 2.13 2.13c.74.74 2.03.74 2.77 0l2.14-2.13 2.13 2.13c.37.37.86.57 1.38.57 1.08 0 1.96-.88 1.96-1.96V12c.01-1.66-1.33-3-2.99-3z"/></svg>
+        <span>Aniversariantes</span>
+      </button>
+      <button class="side-link" data-nav="admins" id="nav-admins" type="button" hidden>
+        <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>
+        <span class="lbl-long">Usuários</span><span class="lbl-short">Usuários</span>
+        <em id="nav-admin-count" class="nav-count">1</em>
+      </button>
+    </nav>
+    <div class="side-verse">
+      <span class="verse-label">✝ Versículo do dia</span>
+      <p id="verse-text"></p>
+      <span class="side-verse-ref" id="verse-ref"></span>
+    </div>
+    <div class="side-user">
+      <div id="user-avatar" class="avatar avatar-sm">?</div>
+      <div class="side-user-info">
+        <b id="user-name">—</b>
+        <span id="user-role" class="role-tag">—</span>
+        <span id="user-email">—</span>
+      </div>
+      <button id="btn-logout" class="icon-btn" type="button" title="Sair da conta" aria-label="Sair da conta">
+        <svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <div class="main-col">
+    <header class="topbar">
+      <img class="topbar-brand" src="assets/ami-bg.png" alt="AMI Integração">
+      <div class="unit-switch" role="tablist" aria-label="Unidade">
+        <button class="unit-btn" data-unit="all" type="button">Todas</button>
+        <button class="unit-btn" data-unit="pacheco" type="button"><i class="dot dot-pacheco"></i>AMI Pacheco</button>
+        <button class="unit-btn" data-unit="amendoeira" type="button"><i class="dot dot-amendoeira"></i>AMI Amendoeira</button>
+      </div>
+      <div class="topbar-right">
+        <button id="btn-new-top" class="btn btn-primary" type="button">
+          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <span>Novo membro</span>
+        </button>
+      </div>
+    </header>
+
+    <div id="verse-bar" class="verse-bar" aria-live="polite">
+      <svg class="verse-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.99 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg>
+      <div class="verse-bar-body">
+        <span class="verse-bar-label">Versículo do dia</span>
+        <p id="verse-bar-text" class="verse-bar-text"></p>
+      </div>
+      <span id="verse-bar-ref" class="verse-bar-ref"></span>
+    </div>
+
+    <main id="main" class="main">
+      <section id="view-dashboard" class="view"></section>
+      <section id="view-members" class="view" hidden></section>
+      <section id="view-birthdays" class="view" hidden></section>
+      <section id="view-admins" class="view" hidden></section>
+    </main>
+  </div>
+</div>
+
+<!-- ══════════ DRAWER DE DETALHES ══════════ -->
+<div id="drawer-overlay" class="drawer-overlay" hidden></div>
+<aside id="drawer" class="drawer" hidden aria-label="Detalhes do membro"></aside>
+
+<!-- ══════════ MODAL DE CADASTRO / EDIÇÃO ══════════ -->
+<div id="form-overlay" class="modal-overlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="form-title">
+    <header class="modal-head">
+      <h2 id="form-title">Novo membro</h2>
+      <button id="form-close" class="icon-btn" type="button" aria-label="Fechar">✕</button>
+    </header>
+    <form id="member-form" class="member-form" novalidate>
+      <div class="form-scroll" id="form-scroll">
+      <div class="form-grid">
+        <label class="span-2">Nome completo *
+          <input name="name" type="text" required maxlength="80" placeholder="Ex.: Maria Aparecida da Silva" autocomplete="off">
+          <em class="field-err" data-err="name"></em>
+        </label>
+        <label>Unidade *
+          <select name="unit" required>
+            <option value="pacheco">AMI Pacheco</option>
+            <option value="amendoeira">AMI Amendoeira</option>
+          </select>
+        </label>
+        <label>Status
+          <select name="status">
+            <option value="ativo">Ativo</option>
+            <option value="integracao">Em integração</option>
+            <option value="visitante">Visitante</option>
+          </select>
+        </label>
+        <label>Ministério
+          <select name="ministry" id="form-ministry"></select>
+        </label>
+        <label>Data de nascimento
+          <input name="birth" type="date">
+        </label>
+        <label>Telefone / WhatsApp
+          <input name="phone" type="tel" placeholder="(21) 99999-9999" maxlength="20">
+        </label>
+        <label>E-mail
+          <input name="email" type="email" placeholder="nome@email.com">
+          <em class="field-err" data-err="email"></em>
+        </label>
+        <label>Data de entrada
+          <input name="joined" type="date">
+        </label>
+        <label class="check-label">
+          <input name="baptized" type="checkbox">
+          <span class="check-box" aria-hidden="true"></span>
+          Batizado(a) nas águas
+        </label>
+        <label class="span-2">Endereço / Bairro
+          <input name="address" type="text" maxlength="120" placeholder="Ex.: Rua das Flores, 120 — Pacheco">
+        </label>
+        <label class="span-2">Observações
+          <textarea name="notes" rows="3" maxlength="500" placeholder="Pedido de oração, célula, como chegou à igreja…"></textarea>
+        </label>
+      </div>
+      </div>
+      <footer class="modal-foot">
+        <button id="form-cancel" class="btn btn-ghost" type="button">Cancelar</button>
+        <button class="btn btn-primary" type="submit" id="form-submit">Cadastrar membro</button>
+      </footer>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════ POPOVER SALVAR VISÃO ══════════ -->
+<div id="saveview-pop" class="saveview-pop" hidden>
+  <label for="saveview-name">Nome desta visão</label>
+  <input id="saveview-name" type="text" maxlength="30" placeholder="Ex.: Visitantes Pacheco">
+  <div class="saveview-actions">
+    <button id="saveview-cancel" class="btn btn-ghost btn-sm" type="button">Cancelar</button>
+    <button id="saveview-confirm" class="btn btn-primary btn-sm" type="button">Salvar</button>
+  </div>
+</div>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
