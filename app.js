@@ -9,6 +9,27 @@ const store = {
   get(k, f) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : f; } catch { return f; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
 };
+const storageOK = (() => {
+  try { localStorage.setItem('ami.probe', '1'); const ok = localStorage.getItem('ami.probe') === '1'; localStorage.removeItem('ami.probe'); return ok; }
+  catch { return false; }
+})();
+function setCookie(k, v, days) {
+  try { document.cookie = `${k}=${encodeURIComponent(v)};path=/;max-age=${Math.round(days * 86400)};SameSite=Lax`; } catch {}
+}
+function getCookie(k) {
+  try {
+    const m = document.cookie.match(new RegExp('(?:^|; )' + k + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : '';
+  } catch { return ''; }
+}
+function delCookie(k) { try { document.cookie = `${k}=;path=/;max-age=0;SameSite=Lax`; } catch {} }
+const AGENTES_URL = 'https://sistemaamiapp-coder.github.io/agentesamiapp/';
+const WA_TEMPLATES = [
+  { label: 'Saudação', text: 'A paz do Senhor, {nome}! Aqui é da AMI. Estamos passando para saber como você está. Conte com a gente!' },
+  { label: 'Aniversário', text: 'Feliz aniversário, {nome}! A família AMI celebra junto com você. Que Deus te abençoe muito!' },
+  { label: 'Visita', text: 'A paz, {nome}! Foi uma alegria receber você na AMI. Que tal um café no próximo culto?' },
+  { label: 'Quer servir', text: 'A paz, {nome}! Vimos seu interesse em servir na igreja. Acesse o app Agentes do Amor AMI e escolha onde você quer servir: ' + AGENTES_URL }
+];
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MONTHS_SHORT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -141,6 +162,12 @@ function unitLabel(u) { return u === 'all' ? 'Todas as unidades' : UNITS[u].labe
 function unitBadge(u) { return `<span class="badge-unit badge-${u}"><i class="dot dot-${u}"></i>${UNITS[u].label}</span>`; }
 function statusBadge(s) { return `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>`; }
 function minChip(m) { const mi = MINISTRIES[m] || MINISTRIES.nenhum; return `<span class="chip-min" style="--mc:${mi.color}">${mi.label}</span>`; }
+function memberFlags(m, cls = '') {
+  const out = [];
+  if (m.peniel) out.push(`<span class="flag-chip peniel">${SVG_PENIEL} Peniel</span>`);
+  if (m.wantsWork) out.push(`<span class="flag-chip servir">${SVG_HEART} Quer servir</span>`);
+  return out.length ? `<span class="mini-flags ${cls}">${out.join('')}</span>` : '';
+}
 
 /* ═════════ Dados ═════════ */
 function seedMembers() {
@@ -248,6 +275,24 @@ function roleOf(email) {
 const isAuthorized = email => !!roleOf(email);
 const isGeneral = () => !!state.user && roleOf(state.user.email) === 'geral';
 const canManageUsers = () => !!state.user && (isGeneral() || roleOf(state.user.email) === 'admin');
+const ALL_UNITS = Object.keys(UNITS);
+
+function userUnits(email) {
+  const e = normEmail(email);
+  if (!e) return [];
+  if (e === GENERAL_ADMIN.email) return [...ALL_UNITS];
+  const u = users.find(a => a.email === e);
+  if (!u) return [];
+  if (u.role === 'geral') return [...ALL_UNITS];
+  return Array.isArray(u.units) ? u.units.filter(x => ALL_UNITS.includes(x)) : [...ALL_UNITS];
+}
+function myUnits() { return state.user ? userUnits(state.user.email) : [...ALL_UNITS]; }
+function clampUnit() {
+  const allowed = myUnits();
+  if (!allowed.length) return;
+  if (state.unit === 'all' && allowed.length === 1) state.unit = allowed[0];
+  else if (state.unit !== 'all' && !allowed.includes(state.unit)) state.unit = allowed.length === 1 ? allowed[0] : 'all';
+}
 
 const state = {
   user: null,
@@ -255,11 +300,23 @@ const state = {
   view: 'dashboard',
   search: '', status: 'todos', ministry: 'todos', sort: 'name',
   bmonth: new Date().getMonth(),
+  waSearch: '', waMsg: '',
   selected: new Set(),
   savedViews: store.get('ami.savedViews', [])
 };
 
-function unitMembers() { return state.unit === 'all' ? members : members.filter(m => m.unit === state.unit); }
+function unitMembers() {
+  const allowed = myUnits();
+  const base = members.filter(m => allowed.includes(m.unit));
+  return state.unit === 'all' ? base : base.filter(m => m.unit === state.unit);
+}
+function allowedMembers() { const allowed = myUnits(); return members.filter(m => allowed.includes(m.unit)); }
+function waNumber(phone) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('55') && d.length >= 12) return d;
+  return (d.length === 10 || d.length === 11) ? '55' + d : d;
+}
 
 function birthdayEntries() {
   return unitMembers()
@@ -331,12 +388,15 @@ function setLoginSetup(on) {
   $('#btn-login').querySelector('span').textContent = on ? 'Criar senha e entrar' : 'Entrar';
   $('#login-note').textContent = on
     ? 'Primeiro acesso: crie a senha do administrador geral. Guarde-a com cuidado.'
-    : 'Acesso restrito a contas autorizadas pelo administrador.';
+    : 'Acesso restrito. Neste dispositivo você continua conectado até clicar em Sair.';
 }
 
 function signIn(account) {
   state.user = { name: account.name, email: normEmail(account.email) };
   store.set('ami.session', state.user);
+  store.set('ami.lastEmail', state.user.email);
+  setCookie('ami_sess', state.user.email, 400);
+  clampUnit();
   showApp();
   toast(`A paz, ${account.name.split(' ')[0]}! Bem-vindo(a) ao AMI Integração.`);
 }
@@ -357,6 +417,7 @@ function showApp() {
 }
 function signOut() {
   localStorage.removeItem('ami.session');
+  delCookie('ami_sess');
   state.user = null;
   loginSetup = false;
   setLoginSetup(false);
@@ -367,25 +428,35 @@ function signOut() {
   $('#login-pass2').value = '';
   $('#app').hidden = true;
   $('#login-screen').hidden = false;
+  const last = store.get('ami.lastEmail', '');
+  if (last) $('#login-email').value = last;
   setTimeout(() => $('#login-email').focus(), 60);
 }
 
 /* ═════════ Render: geral ═════════ */
 function renderAll() {
   const manage = canManageUsers();
+  clampUnit();
+  const allowed = myUnits();
   $('#nav-admins').hidden = !manage;
   $('#nav-admin-count').textContent = users.length + 1;
   if (state.view === 'admins' && !manage) state.view = 'dashboard';
   $$('.side-link').forEach(b => b.classList.toggle('active', b.dataset.nav === state.view));
-  $$('.unit-btn').forEach(b => b.classList.toggle('active', b.dataset.unit === state.unit));
+  $$('.unit-btn').forEach(b => {
+    const key = b.dataset.unit;
+    b.hidden = key === 'all' ? allowed.length < 2 : !allowed.includes(key);
+    b.classList.toggle('active', key === state.unit);
+  });
   $('#nav-count').textContent = unitMembers().length;
   $('#view-dashboard').hidden = state.view !== 'dashboard';
   $('#view-members').hidden = state.view !== 'members';
   $('#view-birthdays').hidden = state.view !== 'birthdays';
+  $('#view-whatsapp').hidden = state.view !== 'whatsapp';
   $('#view-admins').hidden = state.view !== 'admins';
   if (state.view === 'dashboard') renderDashboard();
   else if (state.view === 'members') renderMembers();
   else if (state.view === 'birthdays') renderBirthdays();
+  else if (state.view === 'whatsapp') renderWhatsapp();
   else renderUsers();
 }
 
@@ -406,6 +477,9 @@ function renderDashboard() {
 
   const upcoming = birthdayEntries().sort((a, b) => nextBirthdayDays(a.birth) - nextBirthdayDays(b.birth)).slice(0, 5);
   const recent = [...list].sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 5);
+  const ativosList = list.filter(m => m.status === 'ativo');
+  const penielCount = ativosList.filter(m => m.peniel).length;
+  const servirList = ativosList.filter(m => m.wantsWork);
 
   const statCard = (label, value, color, icon, foot) => `
     <div class="stat" style="--sc:${color}">
@@ -441,7 +515,7 @@ function renderDashboard() {
             <span class="min-bar-num">${x.n}</span>
           </div>`).join('') : '<p class="empty-note">Nenhum membro nesta unidade ainda.</p>'}
         <div class="unit-split">
-          ${Object.keys(UNITS).map(u => {
+          ${myUnits().map(u => {
             const n = members.filter(m => m.unit === u).length;
             const a = members.filter(m => m.unit === u && m.status === 'ativo').length;
             return `<div class="unit-card" style="--uc:${UNITS[u].color}">
@@ -484,6 +558,25 @@ function renderDashboard() {
               <div class="mini-side">${statusBadge(m.status)}</div>
             </div>`).join('')}
           </div>
+        </div>
+        <div class="panel peniel-panel">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            Peniel &amp; servir
+            <button class="panel-link" data-goto="members" type="button">ver membros →</button>
+          </div>
+          <div class="stat-mini">
+            <div class="peniel-num"><b>${penielCount}</b><span>ativos fizeram o Peniel</span></div>
+            <div class="peniel-num"><b>${servirList.length}</b><span>ativos querem servir</span></div>
+          </div>
+          <div class="peniel-list">
+            ${servirList.slice(0, 4).map(m => `<div class="peniel-row" data-open="${m.id}">
+              ${avatarHTML(m.name, 'avatar-sm')}
+              <div class="mini-info"><b>${esc(m.name)}</b><span>${UNITS[m.unit].label}</span></div>
+              <span class="flag-chip servir">${SVG_HEART} Quer servir</span>
+            </div>`).join('') || '<p class="empty-note">Marque no membro “Quer trabalhar na igreja” para acompanhar aqui.</p>'}
+          </div>
+          <a class="btn btn-primary peniel-cta" href="${AGENTES_URL}" target="_blank" rel="noopener">Abrir Agentes do Amor AMI</a>
         </div>
       </div>
     </div>`;
@@ -579,8 +672,7 @@ function updateMemberList() {
       <div class="select-wrap">
         <select id="bulk-unit" aria-label="Mover para unidade">
           <option value="">Mover para…</option>
-          <option value="pacheco">AMI Pacheco</option>
-          <option value="amendoeira">AMI Amendoeira</option>
+          ${myUnits().map(u => `<option value="${u}">${UNITS[u].label}</option>`).join('')}
         </select>
       </div>
       <div class="select-wrap">
@@ -619,7 +711,7 @@ function updateMemberList() {
           ${list.map(m => `
             <tr data-open="${m.id}" class="${sel.has(m.id) ? 'selected' : ''}">
               <td><input type="checkbox" class="rowcheck" data-check="${m.id}" ${sel.has(m.id) ? 'checked' : ''} aria-label="Selecionar ${esc(m.name)}"></td>
-              <td><div class="cell-name">${avatarHTML(m.name, 'avatar-sm')}<div><b>${esc(m.name)}</b><span>${esc(m.email || (m.birth ? 'Nasc. ' + fmtDate(m.birth) : 'Sem e-mail'))}</span></div></div></td>
+              <td><div class="cell-name">${avatarHTML(m.name, 'avatar-sm')}<div><b>${esc(m.name)}</b><span>${esc(m.email || (m.birth ? 'Nasc. ' + fmtDate(m.birth) : 'Sem e-mail'))}</span>${memberFlags(m, 'mini')}</div></div></td>
               <td>${unitBadge(m.unit)}</td>
               <td class="cell-phone">${esc(m.phone || '—')}</td>
               <td>${minChip(m.ministry)}</td>
@@ -677,13 +769,85 @@ function renderBirthdays() {
     </div>`}`;
 }
 
+/* ═════════ Render: contato WhatsApp ═════════ */
+function waContacts() {
+  const q = state.waSearch.trim().toLowerCase();
+  return allowedMembers()
+    .filter(m => state.unit === 'all' || m.unit === state.unit)
+    .filter(m => !q || m.name.toLowerCase().includes(q) || String(m.phone || '').toLowerCase().includes(q) || String(m.email || '').toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+function waHref(m) {
+  const num = waNumber(m.phone);
+  if (!num) return '';
+  const text = state.waMsg.trim().replace(/\{nome\}/gi, m.name.split(' ')[0]);
+  return `https://wa.me/${num}${text ? '?text=' + encodeURIComponent(text) : ''}`;
+}
+function renderWhatsapp() {
+  $('#view-whatsapp').innerHTML = `
+    <div class="view-head">
+      <h1 class="view-title">CONTATO <span class="hl">· WHATSAPP</span>
+        <small>Fale direto com cada membro — ${esc(unitLabel(state.unit).toLowerCase())}.</small>
+      </h1>
+    </div>
+    <div class="wa-tools">
+      <div class="search-box ${state.waSearch ? 'has-value' : ''}">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        <input id="wa-search" type="search" placeholder="Buscar por nome, telefone ou e-mail…" value="${esc(state.waSearch)}" autocomplete="off">
+      </div>
+      <label class="wa-msg"><span>Mensagem (opcional)</span>
+        <input id="wa-msg" type="text" maxlength="200" placeholder="A mensagem acompanha o link do WhatsApp" value="${esc(state.waMsg)}">
+      </label>
+      <div class="wa-templates">
+        ${WA_TEMPLATES.map((t, i) => `<button class="wa-tpl" data-tpl="${i}" type="button">${t.label}</button>`).join('')}
+        <button class="wa-tpl" data-tpl="clear" type="button">Limpar mensagem</button>
+      </div>
+    </div>
+    <p class="wa-summary" id="wa-summary"></p>
+    <div id="wa-grid" class="wa-grid"></div>`;
+  renderWaGrid();
+}
+function renderWaGrid() {
+  const list = waContacts();
+  const total = allowedMembers().filter(m => state.unit === 'all' || m.unit === state.unit).length;
+  const summary = $('#wa-summary');
+  if (summary) summary.innerHTML = `Mostrando <b>${list.length}</b> de <b>${total}</b> membros${state.unit === 'all' ? ' das suas unidades' : ''}. Toque em “WhatsApp” para abrir a conversa.`;
+  const grid = $('#wa-grid');
+  if (!grid) return;
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state wa-empty">
+      <div class="empty-heart"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg></div>
+      <h3>Nenhum membro encontrado</h3>
+      <p>Ajuste a busca ou cadastre um telefone para iniciar uma conversa.</p>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = list.map(m => {
+    const href = waHref(m);
+    return `<div class="wa-card">
+      ${avatarHTML(m.name)}
+      <div class="wa-info">
+        <b>${esc(m.name)}</b>
+        <span><i class="dot dot-${m.unit}"></i> ${esc(m.phone || 'Sem telefone cadastrado')} · ${UNITS[m.unit].label}</span>
+        ${memberFlags(m)}
+      </div>
+      ${href
+        ? `<a class="wa-btn" href="${esc(href)}" target="_blank" rel="noopener" aria-label="Conversar com ${esc(m.name)} no WhatsApp"><svg viewBox="0 0 24 24"><path d="M19.05 4.91A9.82 9.82 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01zM12.04 20.15c-1.52 0-3.01-.41-4.3-1.18l-.31-.18-3.12.82.83-3.04-.2-.32a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.26.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.25-8.11 8.25z"/></svg>WhatsApp</a>`
+        : `<span class="wa-btn no-number">Sem número</span>`}
+    </div>`;
+  }).join('');
+}
+
 /* ═════════ Drawer de detalhes ═════════ */
 let drawerId = null;
 function openDrawer(id) {
   const m = members.find(x => x.id === id);
   if (!m) return;
   drawerId = id;
-  const wa = (m.phone || '').replace(/\D/g, '');
+  const wa = waNumber(m.phone);
+  const flags = [];
+  if (m.peniel) flags.push(`<span class="flag-chip peniel">${SVG_PENIEL} Fez o Peniel</span>`);
+  if (m.wantsWork) flags.push(`<span class="flag-chip servir">${SVG_HEART} Quer trabalhar na igreja</span>`);
   $('#drawer').innerHTML = `
     <div class="drawer-hero">
       <button class="icon-btn drawer-close" data-action="close-drawer" type="button" aria-label="Fechar detalhes">✕</button>
@@ -692,8 +856,9 @@ function openDrawer(id) {
       <div class="drawer-badges">${unitBadge(m.unit)}${statusBadge(m.status)}${minChip(m.ministry)}</div>
     </div>
     <div class="drawer-body">
+      ${flags.length ? `<div class="drawer-flags">${flags.join('')}</div>` : ''}
       <dl class="detail-grid">
-        <div class="detail-item"><dt>Telefone / WhatsApp</dt><dd>${m.phone ? (wa.length >= 10 ? `<a href="https://wa.me/55${wa}" target="_blank" rel="noopener">${esc(m.phone)}</a>` : esc(m.phone)) : '—'}</dd></div>
+        <div class="detail-item"><dt>Telefone / WhatsApp</dt><dd>${m.phone ? (wa ? `<a href="https://wa.me/${wa}" target="_blank" rel="noopener">${esc(m.phone)}</a>` : esc(m.phone)) : '—'}</dd></div>
         <div class="detail-item"><dt>E-mail</dt><dd>${m.email ? `<a href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : '—'}</dd></div>
         <div class="detail-item"><dt>Nascimento</dt><dd>${fmtDate(m.birth)}${m.birth && currentAge(m.birth) !== null ? ` · ${currentAge(m.birth)} anos` : ''}</dd></div>
         <div class="detail-item"><dt>Entrada na igreja</dt><dd>${fmtDate(m.joined)}</dd></div>
@@ -701,8 +866,14 @@ function openDrawer(id) {
         <div class="detail-item"><dt>Próximo aniversário</dt><dd>${m.birth ? (nextBirthdayDays(m.birth) === 0 ? '🎉 Hoje!' : `em ${nextBirthdayDays(m.birth)} dias`) : '—'}</dd></div>
         <div class="detail-item full"><dt>Endereço / Bairro</dt><dd>${esc(m.address || '—')}</dd></div>
       </dl>
+      ${flags.length ? `<div class="agentes-cta">
+        <b>${m.wantsWork ? 'Pronto(a) para servir' : 'Peniel concluído'}</b>
+        <p>${m.wantsWork ? 'Este membro quer trabalhar na igreja. Abra o app Agentes do Amor AMI para acompanhar o voluntariado.' : 'Este membro fez o Peniel. Use o app Agentes do Amor AMI para acompanhar a caminhada de servir.'}</p>
+        <a class="btn btn-primary" href="${AGENTES_URL}" target="_blank" rel="noopener">Abrir Agentes do Amor AMI</a>
+      </div>` : ''}
       ${m.notes ? `<dt style="font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Observações</dt><div class="detail-notes">${esc(m.notes)}</div>` : ''}
       <div class="drawer-actions">
+        ${wa ? `<a class="btn btn-ghost" href="https://wa.me/${wa}" target="_blank" rel="noopener">${SVG_CHAT} WhatsApp</a>` : ''}
         <button class="btn btn-primary" data-edit="${m.id}" type="button">
           <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
           Editar
@@ -732,14 +903,17 @@ function openForm(id = null) {
   $$('#member-form .field-err').forEach(e => e.classList.remove('show'));
   $$('#member-form input').forEach(i => i.classList.remove('invalid'));
   $('#form-ministry').innerHTML = Object.entries(MINISTRIES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  form.elements.unit.innerHTML = myUnits().map(u => `<option value="${u}">${UNITS[u].label}</option>`).join('');
   const m = id ? members.find(x => x.id === id) : null;
   $('#form-title').textContent = m ? 'Editar membro' : 'Novo membro';
   $('#form-submit').textContent = m ? 'Salvar alterações' : 'Cadastrar membro';
   if (m) {
     for (const k of ['name','unit','status','ministry','birth','phone','email','joined','address','notes']) form.elements[k].value = m[k] || '';
     form.elements.baptized.checked = !!m.baptized;
+    form.elements.peniel.checked = !!m.peniel;
+    form.elements.wantsWork.checked = !!m.wantsWork;
   } else {
-    form.elements.unit.value = state.unit !== 'all' ? state.unit : 'pacheco';
+    form.elements.unit.value = state.unit !== 'all' ? state.unit : myUnits()[0];
     form.elements.ministry.value = 'nenhum';
     form.elements.joined.value = new Date().toISOString().slice(0, 10);
   }
@@ -766,12 +940,17 @@ function submitForm(e) {
     form.elements.email.classList.add('invalid'); ok = false;
   }
   if (!ok) return;
+  if (!myUnits().includes(form.elements.unit.value)) {
+    toast('Você só pode cadastrar membros nas unidades liberadas para o seu acesso.', { type: 'danger' });
+    return;
+  }
 
   const data = {
     name: val('name'), unit: form.elements.unit.value, status: form.elements.status.value,
     ministry: form.elements.ministry.value, birth: form.elements.birth.value,
     phone: val('phone'), email: val('email'), joined: form.elements.joined.value,
-    baptized: form.elements.baptized.checked, address: val('address'), notes: val('notes')
+    baptized: form.elements.baptized.checked, peniel: form.elements.peniel.checked,
+    wantsWork: form.elements.wantsWork.checked, address: val('address'), notes: val('notes')
   };
   if (editingId) {
     const m = members.find(x => x.id === editingId);
@@ -956,15 +1135,17 @@ function exportExcel() {
     { label: 'Nome', width: 34 }, { label: 'Unidade', width: 18 }, { label: 'Status', width: 16 },
     { label: 'Ministério', width: 18 }, { label: 'Nascimento', width: 14 }, { label: 'Telefone', width: 18 },
     { label: 'E-mail', width: 30 }, { label: 'Batizado', width: 12 }, { label: 'Entrada', width: 14 },
+    { label: 'Peniel', width: 10 }, { label: 'Quer servir', width: 12 },
     { label: 'Endereço', width: 34 }, { label: 'Observações', width: 40 }
   ];
   const mRows = list.map(m => [
     m.name, UNITS[m.unit].label, STATUS[m.status].label, (MINISTRIES[m.ministry] || MINISTRIES.nenhum).label,
     fmtDate(m.birth) === '—' ? '' : fmtDate(m.birth), m.phone || '', m.email || '', m.baptized ? 'Sim' : 'Não',
-    fmtDate(m.joined) === '—' ? '' : fmtDate(m.joined), m.address || '', m.notes || ''
+    fmtDate(m.joined) === '—' ? '' : fmtDate(m.joined), m.peniel ? 'Sim' : 'Não', m.wantsWork ? 'Sim' : 'Não',
+    m.address || '', m.notes || ''
   ]);
   const sheets = [
-    { name: 'Membros', title: `AMI INTEGRAÇÃO · ${unitLabel(state.unit).toUpperCase()}`, subtitle: `Cadastro de membros · Exportado em ${fmtDate(stamp)} · ${list.length} registro(s)${ftxt}`, cols: mCols, rows: mRows, centerCols: [1, 2, 4, 5, 7, 8] }
+    { name: 'Membros', title: `AMI INTEGRAÇÃO · ${unitLabel(state.unit).toUpperCase()}`, subtitle: `Cadastro de membros · Exportado em ${fmtDate(stamp)} · ${list.length} registro(s)${ftxt}`, cols: mCols, rows: mRows, centerCols: [1, 2, 4, 5, 7, 8, 9, 10] }
   ];
   const blob = new Blob([xlsxBuild(sheets)], { type: XLSX_MIME });
   const a = document.createElement('a');
@@ -1019,8 +1200,11 @@ const SVG_PLUS = '<svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2
 const SVG_KEY = '<svg viewBox="0 0 24 24"><path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg>';
 const SVG_PENCIL = '<svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
 const SVG_PERSON = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>';
+const SVG_HEART = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
+const SVG_PENIEL = '<svg viewBox="0 0 24 24"><path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>';
+const SVG_CHAT = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>';
 
-const ROLE_LABEL = { admin: 'Administrador', user: 'Usuário' };
+const ROLE_LABEL = { geral: 'Administrador geral', admin: 'Administrador', user: 'Usuário' };
 let editingUserId = null;
 let editingGeral = false;
 
@@ -1057,7 +1241,7 @@ function renderUsers() {
               <em class="admin-meta">Conta principal · acesso total · não removível</em>
             </div>
             <span class="badge-role role-geral">${SVG_CROWN}Administrador geral</span>
-            ${isGeneral() ? `<button class="icon-btn" data-geral-pass type="button" title="Alterar minha senha" aria-label="Alterar minha senha">${SVG_KEY}</button>` : ''}
+            ${normEmail(state.user.email) === GENERAL_ADMIN.email ? `<button class="icon-btn" data-geral-pass type="button" title="Alterar minha senha" aria-label="Alterar minha senha">${SVG_KEY}</button>` : ''}
           </div>
           ${users.map(u => `
             <div class="admin-card">
@@ -1066,12 +1250,15 @@ function renderUsers() {
                 <b>${esc(u.name)} ${normEmail(state.user.email) === u.email ? '<em class="you-tag">você</em>' : ''}</b>
                 <span>${esc(u.email)}</span>
                 <em class="admin-meta">Desde ${fmtDate((u.addedAt || '').slice(0, 10))}${u.hash ? '' : ' · aguardando primeira senha'}</em>
+                <em class="admin-units">${u.role === 'geral'
+                  ? `<span class="flag-chip">${SVG_CROWN} Todas as unidades</span>`
+                  : (u.units || ALL_UNITS).map(x => `<span class="flag-chip"><i class="dot dot-${x}"></i>${UNITS[x].label}</span>`).join('') || '<span class="flag-chip">Sem unidade liberada</span>'}</em>
               </div>
-              <span class="badge-role ${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? SVG_SHIELD + 'Administrador' : 'Usuário'}</span>
+              <span class="badge-role role-${u.role}">${u.role === 'geral' ? SVG_CROWN : u.role === 'admin' ? SVG_SHIELD : ''}${ROLE_LABEL[u.role] || 'Usuário'}</span>
               ${canEditUser(u) ? `
                 <button class="icon-btn" data-user-pass="${u.id}" type="button" title="Definir nova senha" aria-label="Definir nova senha de ${esc(u.name)}">${SVG_KEY}</button>
                 <button class="icon-btn" data-user-edit="${u.id}" type="button" title="Editar usuário" aria-label="Editar ${esc(u.name)}">${SVG_PENCIL}</button>` : ''}
-              ${u.email !== normEmail(state.user.email) ? `<button class="icon-btn del" data-user-del="${u.id}" type="button" title="Remover acesso" aria-label="Remover acesso de ${esc(u.name)}">${SVG_TRASH}</button>` : ''}
+              ${canEditUser(u) && u.email !== normEmail(state.user.email) ? `<button class="icon-btn del" data-user-del="${u.id}" type="button" title="Remover acesso" aria-label="Remover acesso de ${esc(u.name)}">${SVG_TRASH}</button>` : ''}
             </div>`).join('')}
           ${!users.length ? '<p class="empty-note">Nenhum outro usuário cadastrado.<br>Use o formulário ao lado para criar o acesso de um irmão(ã) da equipe.</p>' : ''}
         </div>
@@ -1093,8 +1280,19 @@ function renderUsers() {
                 <select id="acc-role" ${isGeneral() ? '' : 'disabled'}>
                   <option value="user">Usuário — cadastra e edita membros</option>
                   <option value="admin">Administrador — também gerencia usuários</option>
+                  ${isGeneral() ? '<option value="geral">Administrador geral — acesso total ao sistema</option>' : ''}
                 </select>
               </label>
+              <div class="span-2" id="acc-units-wrap" ${geralMode ? 'hidden' : ''}>
+                <span class="acc-units-label">Unidades liberadas *</span>
+                <div class="unit-access" id="acc-units">
+                  ${ALL_UNITS.map(u => {
+                    const mine = myUnits().includes(u);
+                    return `<label class="check-label"><input type="checkbox" value="${u}" ${mine ? '' : 'disabled'}><span class="check-box" aria-hidden="true"></span><i class="dot dot-${u}"></i>${UNITS[u].label}</label>`;
+                  }).join('')}
+                </div>
+                <em class="field-err" data-uerr="units"></em>
+              </div>
               <label class="span-2">${geralMode ? 'Nova senha do administrador geral *' : editing ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha de acesso *'}
                 <input id="acc-pass" type="password" autocomplete="new-password" placeholder="Mínimo de 6 caracteres">
                 <em class="field-err" data-uerr="pass"></em>
@@ -1106,14 +1304,14 @@ function renderUsers() {
           <p class="admin-hint">${geralMode
             ? 'Você está logado como administrador geral. A nova senha passa a valer no próximo acesso.'
             : isGeneral()
-              ? 'Cada pessoa recebe o próprio e-mail e senha — nunca compartilhe a sua conta. Administradores também podem cadastrar usuários comuns, mas somente o administrador geral cria outros administradores.'
+              ? 'Cada pessoa recebe o próprio e-mail e senha — nunca compartilhe a sua conta. Administradores comuns só cadastram usuários; administradores gerais criam administradores e outros gerais.'
               : 'Você pode cadastrar usuários comuns e redefinir a senha deles. Contas de administrador são gerenciadas pelo administrador geral.'}</p>
         </div>
         <div class="panel">
           <div class="panel-title">${SVG_LOCK} Níveis de acesso</div>
-          <div class="perm-row"><span class="perm-ico role-geral">${SVG_CROWN}</span><div><b>Administrador geral</b><span>${GENERAL_ADMIN.email} — acesso total: membros, exportações e gestão de todos os usuários.</span></div></div>
-          <div class="perm-row"><span class="perm-ico role-admin">${SVG_SHIELD}</span><div><b>Administrador</b><span>Gerencia membros, exportações e usuários comuns. Não cria nem altera outros administradores.</span></div></div>
-          <div class="perm-row"><span class="perm-ico role-user">${SVG_PERSON}</span><div><b>Usuário</b><span>Cadastra e edita membros, unidades, visões e exportações. Não gerencia contas de acesso.</span></div></div>
+          <div class="perm-row"><span class="perm-ico role-geral">${SVG_CROWN}</span><div><b>Administrador geral</b><span>Acesso total: membros, exportações, todas as unidades e gestão de todos os usuários. Somente um administrador geral cria outros administradores gerais.</span></div></div>
+          <div class="perm-row"><span class="perm-ico role-admin">${SVG_SHIELD}</span><div><b>Administrador</b><span>Gerencia membros, exportações e usuários comuns nas unidades liberadas para ele. Pode ter acesso às duas unidades.</span></div></div>
+          <div class="perm-row"><span class="perm-ico role-user">${SVG_PERSON}</span><div><b>Usuário</b><span>Vê e cadastra membros apenas nas unidades liberadas pelo administrador. Não gerencia contas de acesso.</span></div></div>
         </div>
       </div>
     </div>`;
@@ -1121,6 +1319,14 @@ function renderUsers() {
   $('#acc-email').value = geralMode ? GENERAL_ADMIN.email : editing ? editing.email : '';
   $('#acc-role').value = editing ? editing.role : 'user';
   $('#acc-pass').value = '';
+  const presetUnits = geralMode ? [] : editing
+    ? (editing.role === 'geral' ? ALL_UNITS : (editing.units || ALL_UNITS))
+    : (state.unit !== 'all' ? [state.unit] : myUnits());
+  $$('#acc-units input').forEach(b => { b.checked = presetUnits.includes(b.value); });
+  const roleSel = $('#acc-role');
+  const syncUnits = () => { const w = $('#acc-units-wrap'); if (w) w.hidden = roleSel.value === 'geral'; };
+  roleSel.addEventListener('change', syncUnits);
+  syncUnits();
   $('#acc-form').addEventListener('submit', submitUser);
   const cancel = $('#acc-cancel');
   if (cancel) cancel.addEventListener('click', () => { editingUserId = null; editingGeral = false; renderUsers(); });
@@ -1149,9 +1355,15 @@ function submitUser(e) {
   const pass = passI.value;
   const editing = editingUserId ? users.find(u => u.id === editingUserId) : null;
   const role = isGeneral() ? roleI.value : (editing ? editing.role : 'user');
-  const errN = $('[data-uerr="name"]'), errE = $('[data-uerr="email"]'), errP = $('[data-uerr="pass"]');
-  [errN, errE, errP].forEach(el => el.classList.remove('show'));
+  const errN = $('[data-uerr="name"]'), errE = $('[data-uerr="email"]'), errP = $('[data-uerr="pass"]'), errU = $('[data-uerr="units"]');
+  [errN, errE, errP, errU].forEach(el => el.classList.remove('show'));
   [nameI, emailI, passI].forEach(el => el.classList.remove('invalid'));
+  const grantable = myUnits();
+  const picked = $$('#acc-units input:checked').filter(b => !b.disabled).map(b => b.value);
+  const kept = editing && editing.role !== 'geral'
+    ? (editing.units || ALL_UNITS).filter(x => !grantable.includes(x))
+    : [];
+  const units = role === 'geral' ? [...ALL_UNITS] : [...new Set([...kept, ...picked])];
   let ok = true;
   if (!name) {
     errN.textContent = 'Informe o nome do usuário.'; errN.classList.add('show');
@@ -1175,12 +1387,16 @@ function submitUser(e) {
     errP.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; errP.classList.add('show');
     passI.classList.add('invalid'); ok = false;
   }
+  if (role !== 'geral' && !units.length) {
+    errU.textContent = 'Libere pelo menos uma unidade para este acesso.'; errU.classList.add('show'); ok = false;
+  }
   if (!ok) return;
 
   if (editing) {
     editing.name = name;
     if (isGeneral()) editing.email = email;
     if (isGeneral()) editing.role = role;
+    editing.units = units;
     if (pass) { editing.salt = makeSalt(); editing.hash = hashPass(editing.salt, pass); }
     saveUsers();
     editingUserId = null;
@@ -1188,7 +1404,7 @@ function submitUser(e) {
     toast(`Dados de ${name.split(' ')[0]} atualizados${pass ? ' e nova senha definida' : ''}.`);
   } else {
     const salt = makeSalt();
-    users.push({ id: uid(), name, email, role, salt, hash: hashPass(salt, pass), addedAt: new Date().toISOString(), addedBy: state.user.name });
+    users.push({ id: uid(), name, email, role, units, salt, hash: hashPass(salt, pass), addedAt: new Date().toISOString(), addedBy: state.user.name });
     saveUsers();
     renderAll();
     toast(`${name.split(' ')[0]} cadastrado(a) como ${ROLE_LABEL[role]} com acesso próprio.`);
@@ -1291,6 +1507,20 @@ document.addEventListener('click', e => {
 
   const action = t.closest('[data-action]')?.dataset.action;
   if (action === 'new-member') { openForm(); return; }
+  const tplBtn = t.closest('[data-tpl]');
+  if (tplBtn) {
+    const input = $('#wa-msg');
+    if (!input) return;
+    const key = tplBtn.dataset.tpl;
+    if (key === 'clear') { state.waMsg = ''; input.value = ''; }
+    else {
+      const tpl = WA_TEMPLATES[+key];
+      if (tpl) { state.waMsg = tpl.text; input.value = tpl.text; }
+    }
+    renderWaGrid();
+    input.focus();
+    return;
+  }
   if (action === 'export') { exportExcel(); return; }
   if (action === 'close-drawer') { closeDrawer(); return; }
   if (action === 'bulk-delete') { deleteMembers([...state.selected]); return; }
@@ -1334,6 +1564,7 @@ document.addEventListener('change', e => {
   else if (t.id === 'bulk-unit' && t.value) {
     const ids = [...state.selected];
     const dest = t.value;
+    if (!myUnits().includes(dest)) { toast('Você não tem acesso a essa unidade.', { type: 'danger' }); return; }
     members.forEach(m => { if (ids.includes(m.id)) m.unit = dest; });
     saveMembers(); state.selected.clear(); renderAll();
     toast(`${ids.length} membro${ids.length > 1 ? 's' : ''} movido${ids.length > 1 ? 's' : ''} para ${UNITS[dest].label}.`);
@@ -1353,6 +1584,17 @@ document.addEventListener('input', e => {
     $('.search-box').classList.toggle('has-value', !!state.search);
     updateMemberList();
     return;
+  }
+  if (e.target.id === 'wa-search') {
+    state.waSearch = e.target.value;
+    const box = $('#view-whatsapp .search-box');
+    if (box) box.classList.toggle('has-value', !!state.waSearch);
+    renderWaGrid();
+    return;
+  }
+  if (e.target.id === 'wa-msg') {
+    state.waMsg = e.target.value;
+    renderWaGrid();
   }
 });
 
@@ -1402,9 +1644,18 @@ function loginSubmit(e) {
   }
 
   const u = users.find(x => x.email === email);
-  if (!u) { showLoginError('Esta conta não tem acesso ao sistema. Peça ao administrador para cadastrá-la.'); return; }
+  if (!u) {
+    if (members.some(m => normEmail(m.email) === email)) showLoginError('Este e-mail está cadastrado como membro, mas não tem acesso de usuário. Peça ao administrador para criar o acesso na tela Usuários.');
+    else if (!users.length && !geralCred) showLoginError('Nenhuma conta está cadastrada neste navegador. O acesso deve ser criado no mesmo computador e no mesmo arquivo (ou link) onde o sistema é usado.');
+    else showLoginError('Esta conta não tem acesso ao sistema. Confira o e-mail ou peça ao administrador para cadastrá-la.');
+    return;
+  }
   if (!u.hash) { showLoginError('Esta conta ainda não tem senha definida. Peça ao administrador para definir sua senha.'); return; }
   if (hashPass(u.salt, pass) !== u.hash) { showLoginError('E-mail ou senha incorretos.'); return; }
+  if (!userUnits(u.email).length) {
+    showLoginError('Seu acesso ainda não tem unidade liberada. Peça ao administrador para liberar AMI Pacheco e/ou AMI Amendoeira na tela Usuários.');
+    return;
+  }
   enter({ name: u.name, email: u.email });
 }
 
@@ -1425,20 +1676,44 @@ $('#saveview-confirm').addEventListener('click', confirmSaveView);
 $('#saveview-name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmSaveView(); } });
 
 /* ═════════ Início ═════════ */
+function showStorageWarning() {
+  if (storageOK || document.getElementById('storage-warn')) return;
+  const el = document.createElement('div');
+  el.id = 'storage-warn';
+  el.className = 'storage-warn';
+  el.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+    <div><b>Este navegador está bloqueando os dados do app.</b> O acesso e os cadastros não ficam salvos entre visitas. Abra sempre pelo mesmo link (ex.: http://localhost:8123) ou permita “dados do site” nas configurações do navegador.</div>
+    <button type="button" aria-label="Fechar aviso">✕</button>`;
+  document.body.appendChild(el);
+  el.querySelector('button').addEventListener('click', () => el.remove());
+}
+
 spawnEmbers();
 renderVerse(true);
 setInterval(() => renderVerse(false), 60000);
 window.addEventListener('focus', () => renderVerse(false));
 document.addEventListener('visibilitychange', () => { if (!document.hidden) renderVerse(false); });
-const session = store.get('ami.session', null);
+
+let session = store.get('ami.session', null);
+if (!session || !session.email) {
+  const saved = getCookie('ami_sess');
+  if (saved) session = { email: saved };
+}
 if (session && session.email) {
   const email = normEmail(session.email);
   const hasPass = email === GENERAL_ADMIN.email ? !!geralCred : !!(users.find(u => u.email === email) || {}).hash;
-  if (isAuthorized(email) && hasPass) {
+  if (isAuthorized(email) && hasPass && userUnits(email).length) {
     state.user = { name: (users.find(u => u.email === email) || {}).name || GENERAL_ADMIN.name, email };
+    clampUnit();
     showApp();
   } else {
     localStorage.removeItem('ami.session');
+    delCookie('ami_sess');
     if (!isAuthorized(email)) showLoginError(`A conta ${email} não tem mais acesso. Fale com o administrador.`);
+    else if (!userUnits(email).length) showLoginError('Seu acesso está sem unidade liberada. Fale com o administrador.');
   }
+} else {
+  const last = store.get('ami.lastEmail', '');
+  if (last) $('#login-email').value = last;
 }
+showStorageWarning();
