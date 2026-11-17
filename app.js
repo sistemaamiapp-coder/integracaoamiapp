@@ -312,10 +312,12 @@ function unitMembers() {
 }
 function allowedMembers() { const allowed = myUnits(); return members.filter(m => allowed.includes(m.unit)); }
 function waNumber(phone) {
-  let d = String(phone || '').replace(/\D/g, '');
+  let d = String(phone || '').replace(/\D/g, '').replace(/^0+/, '');
   if (!d) return '';
-  if (d.startsWith('55') && d.length >= 12) return d;
-  return (d.length === 10 || d.length === 11) ? '55' + d : d;
+  if (d.length === 10 || d.length === 11) return '55' + d;
+  if (d.startsWith('55') && (d.length === 12 || d.length === 13)) return d;
+  if (d.length >= 12 && d.length <= 15) return d;
+  return '';
 }
 
 function birthdayEntries() {
@@ -781,7 +783,7 @@ function waHref(m) {
   const num = waNumber(m.phone);
   if (!num) return '';
   const text = state.waMsg.trim().replace(/\{nome\}/gi, m.name.split(' ')[0]);
-  return `https://wa.me/${num}${text ? '?text=' + encodeURIComponent(text) : ''}`;
+  return `https://api.whatsapp.com/send?phone=${num}${text ? '&text=' + encodeURIComponent(text) : ''}`;
 }
 function renderWhatsapp() {
   $('#view-whatsapp').innerHTML = `
@@ -833,7 +835,7 @@ function renderWaGrid() {
       </div>
       ${href
         ? `<a class="wa-btn" href="${esc(href)}" target="_blank" rel="noopener" aria-label="Conversar com ${esc(m.name)} no WhatsApp"><svg viewBox="0 0 24 24"><path d="M19.05 4.91A9.82 9.82 0 0 0 12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38c1.45.79 3.08 1.21 4.79 1.21 5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01zM12.04 20.15c-1.52 0-3.01-.41-4.3-1.18l-.31-.18-3.12.82.83-3.04-.2-.32a8.2 8.2 0 0 1-1.26-4.36c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.26.86 5.82 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.25-8.11 8.25z"/></svg>WhatsApp</a>`
-        : `<span class="wa-btn no-number">Sem número</span>`}
+        : `<span class="wa-btn no-number" title="Cadastre o telefone com DDD para abrir a conversa">${m.phone ? 'Número incompleto' : 'Sem número'}</span>`}
     </div>`;
   }).join('');
 }
@@ -858,7 +860,7 @@ function openDrawer(id) {
     <div class="drawer-body">
       ${flags.length ? `<div class="drawer-flags">${flags.join('')}</div>` : ''}
       <dl class="detail-grid">
-        <div class="detail-item"><dt>Telefone / WhatsApp</dt><dd>${m.phone ? (wa ? `<a href="https://wa.me/${wa}" target="_blank" rel="noopener">${esc(m.phone)}</a>` : esc(m.phone)) : '—'}</dd></div>
+        <div class="detail-item"><dt>Telefone / WhatsApp</dt><dd>${m.phone ? (wa ? `<a href="https://api.whatsapp.com/send?phone=${wa}" target="_blank" rel="noopener">${esc(m.phone)}</a>` : esc(m.phone)) : '—'}</dd></div>
         <div class="detail-item"><dt>E-mail</dt><dd>${m.email ? `<a href="mailto:${esc(m.email)}">${esc(m.email)}</a>` : '—'}</dd></div>
         <div class="detail-item"><dt>Nascimento</dt><dd>${fmtDate(m.birth)}${m.birth && currentAge(m.birth) !== null ? ` · ${currentAge(m.birth)} anos` : ''}</dd></div>
         <div class="detail-item"><dt>Entrada na igreja</dt><dd>${fmtDate(m.joined)}</dd></div>
@@ -873,7 +875,7 @@ function openDrawer(id) {
       </div>` : ''}
       ${m.notes ? `<dt style="font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:6px">Observações</dt><div class="detail-notes">${esc(m.notes)}</div>` : ''}
       <div class="drawer-actions">
-        ${wa ? `<a class="btn btn-ghost" href="https://wa.me/${wa}" target="_blank" rel="noopener">${SVG_CHAT} WhatsApp</a>` : ''}
+        ${wa ? `<a class="btn btn-ghost" href="https://api.whatsapp.com/send?phone=${wa}" target="_blank" rel="noopener">${SVG_CHAT} WhatsApp</a>` : ''}
         <button class="btn btn-primary" data-edit="${m.id}" type="button">
           <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
           Editar
