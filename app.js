@@ -1288,9 +1288,10 @@ function renderUsers() {
                 <div class="unit-access" id="acc-units">
                   ${ALL_UNITS.map(u => {
                     const mine = myUnits().includes(u);
-                    return `<label class="check-label"><input type="checkbox" value="${u}" ${mine ? '' : 'disabled'}><span class="check-box" aria-hidden="true"></span><i class="dot dot-${u}"></i>${UNITS[u].label}</label>`;
+                    return `<label class="check-label" ${mine ? '' : 'title="Somente o administrador geral pode liberar esta unidade"' }><input type="checkbox" value="${u}" ${mine ? '' : 'disabled'}><span class="check-box" aria-hidden="true"></span><i class="dot dot-${u}"></i>${UNITS[u].label}</label>`;
                   }).join('')}
                 </div>
+                <em class="unit-hint">${isGeneral() ? 'Marque as unidades que este acesso poderá visualizar e editar.' : 'Você libera as unidades que você mesmo acessa. O administrador geral pode liberar as duas.'}</em>
                 <em class="field-err" data-uerr="units"></em>
               </div>
               <label class="span-2">${geralMode ? 'Nova senha do administrador geral *' : editing ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha de acesso *'}

@@ -787,6 +787,9 @@ body.modal-open{overflow:hidden}
 }
 .unit-access .check-label input:checked + .check-box{background:var(--red);border-color:var(--red)}
 .unit-access .check-label input:checked + .check-box::after{color:#fff}
+.unit-access .check-label input:disabled + .check-box{opacity:.45}
+.unit-access .check-label:has(input:disabled){opacity:.55;cursor:not-allowed}
+.unit-hint{display:block;margin-top:7px;font-size:11.5px;line-height:1.5;color:var(--faint);font-style:normal}
 .admin-units{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
 .admin-units .flag-chip{font-size:9.5px;padding:2px 7px;letter-spacing:.03em;text-transform:none}
 .admin-units .flag-chip svg{width:11px;height:11px}

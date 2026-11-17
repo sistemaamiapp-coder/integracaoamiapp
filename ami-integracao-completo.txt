@@ -800,6 +800,9 @@ body.modal-open{overflow:hidden}
 }
 .unit-access .check-label input:checked + .check-box{background:var(--red);border-color:var(--red)}
 .unit-access .check-label input:checked + .check-box::after{color:#fff}
+.unit-access .check-label input:disabled + .check-box{opacity:.45}
+.unit-access .check-label:has(input:disabled){opacity:.55;cursor:not-allowed}
+.unit-hint{display:block;margin-top:7px;font-size:11.5px;line-height:1.5;color:var(--faint);font-style:normal}
 .admin-units{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px}
 .admin-units .flag-chip{font-size:9.5px;padding:2px 7px;letter-spacing:.03em;text-transform:none}
 .admin-units .flag-chip svg{width:11px;height:11px}
@@ -2367,9 +2370,10 @@ function renderUsers() {
                 <div class="unit-access" id="acc-units">
                   ${ALL_UNITS.map(u => {
                     const mine = myUnits().includes(u);
-                    return `<label class="check-label"><input type="checkbox" value="${u}" ${mine ? '' : 'disabled'}><span class="check-box" aria-hidden="true"></span><i class="dot dot-${u}"></i>${UNITS[u].label}</label>`;
+                    return `<label class="check-label" ${mine ? '' : 'title="Somente o administrador geral pode liberar esta unidade"' }><input type="checkbox" value="${u}" ${mine ? '' : 'disabled'}><span class="check-box" aria-hidden="true"></span><i class="dot dot-${u}"></i>${UNITS[u].label}</label>`;
                   }).join('')}
                 </div>
+                <em class="unit-hint">${isGeneral() ? 'Marque as unidades que este acesso poderá visualizar e editar.' : 'Você libera as unidades que você mesmo acessa. O administrador geral pode liberar as duas.'}</em>
                 <em class="field-err" data-uerr="units"></em>
               </div>
               <label class="span-2">${geralMode ? 'Nova senha do administrador geral *' : editing ? 'Nova senha (deixe em branco para manter a atual)' : 'Senha de acesso *'}
