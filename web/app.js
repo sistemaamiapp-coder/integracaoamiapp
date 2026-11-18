@@ -1781,6 +1781,14 @@ $('#saveview-cancel').addEventListener('click', () => { $('#saveview-pop').hidde
 $('#saveview-confirm').addEventListener('click', confirmSaveView);
 $('#saveview-name').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); confirmSaveView(); } });
 
+/* Remove o selo "Made with Qoder" que a hospedagem injeta na página
+   (equivalente ao botão de ocultar do próprio selo). */
+(function hideHostingBadge() {
+  const drop = () => document.getElementById('qoder-sites-watermark')?.remove();
+  drop();
+  new MutationObserver(drop).observe(document.documentElement, { childList: true });
+})();
+
 /* ═════════ Início ═════════ */
 async function boot() {
   spawnEmbers();
