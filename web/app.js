@@ -599,7 +599,7 @@ function shiftMonthKey(key, delta) {
   return monthKeyOf(new Date(y, m - 1 + delta, 1));
 }
 
-function renderReport() {
+function reportMonthData() {
   const list = unitMembers();
   const current = monthKeyOf(new Date());
   const months = [];
@@ -613,13 +613,24 @@ function renderReport() {
     const k = (m.createdAt || '').slice(0, 7);
     if (k in counts) counts[k] += 1;
   });
-  const peak = Math.max(1, ...months.map(k => counts[k]));
-  const yearTotal = months.reduce((n, k) => n + counts[k], 0);
 
   const [sy, sm] = selected.split('-').map(Number);
   const monthName = `${MONTHS[sm - 1]} de ${sy}`;
   const fresh = list.filter(m => (m.createdAt || '').slice(0, 7) === selected);
   const arrived = list.filter(m => (m.joined || '').slice(0, 7) === selected);
+  const bdays = list
+    .filter(m => m.birth && parseDate(m.birth).getMonth() === sm - 1)
+    .sort((a, b) => parseDate(a.birth).getDate() - parseDate(b.birth).getDate());
+  const scope = myUnits();
+  const newAccess = users.filter(u => (u.addedAt || '').slice(0, 7) === selected
+    && (isGeneral() || (u.units || []).some(x => scope.includes(x))));
+  return { list, months, counts, selected, sy, sm, monthName, fresh, arrived, bdays, newAccess };
+}
+
+function renderReport() {
+  const { list, months, counts, selected, sm, sy, monthName, fresh, arrived, bdays, newAccess } = reportMonthData();
+  const peak = Math.max(1, ...months.map(k => counts[k]));
+  const yearTotal = months.reduce((n, k) => n + counts[k], 0);
   const baptizedN = fresh.filter(m => m.baptized).length;
   const penielN = fresh.filter(m => m.peniel).length;
   const serveN = fresh.filter(m => m.wantsWork).length;
@@ -657,18 +668,21 @@ function renderReport() {
   const anyUnit = unitRows.some(r => r.n);
   const anyStatus = statusRows.some(r => r.n);
 
-  const bdays = list
-    .filter(m => m.birth && parseDate(m.birth).getMonth() === sm - 1)
-    .sort((a, b) => parseDate(a.birth).getDate() - parseDate(b.birth).getDate());
-  const scope = myUnits();
-  const newAccess = users.filter(u => (u.addedAt || '').slice(0, 7) === selected
-    && (isGeneral() || (u.units || []).some(x => scope.includes(x))));
-
   $('#view-report').innerHTML = `
     <div class="view-head">
       <h1 class="view-title">RELATÓRIO MENSAL <span class="hl">· PARA APRESENTAÇÕES</span>
         <small>${esc(unitLabel(state.unit))} · o que aconteceu em ${monthName}. Visível apenas para administradores.</small>
       </h1>
+      <div class="report-actions">
+        <button class="btn btn-ghost" data-action="export-report" type="button" title="Baixar o relatório em Excel (.xlsx)">
+          <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Exportar Excel
+        </button>
+        <button class="btn btn-primary" data-action="print-report" type="button" title="Imprimir ou salvar em PDF">
+          <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+          Imprimir / PDF
+        </button>
+      </div>
     </div>
     <div class="stats">
       ${statCard('Cadastros em ' + MONTHS_SHORT[sm - 1], fresh.length, 'var(--red-hot)', SVG_PLUS, `novos membros em ${monthName}`)}
@@ -760,6 +774,101 @@ function renderReport() {
     requestAnimationFrame(tick);
     setTimeout(() => { el.textContent = target; }, 800);
   });
+}
+
+/* Exportação e impressão do relatório mensal */
+function exportReport() {
+  const d = reportMonthData();
+  const { list, months, counts, selected, monthName, fresh, arrived, bdays, newAccess } = d;
+  const baptizedN = fresh.filter(m => m.baptized).length;
+  const penielN = fresh.filter(m => m.peniel).length;
+  const serveN = fresh.filter(m => m.wantsWork).length;
+  const unitName = unitLabel(state.unit);
+  const stamp = new Date().toISOString().slice(0, 10);
+  const subtitle = `Relatório mensal · ${unitName} · ${monthName} · gerado em ${fmtDate(stamp)}`;
+
+  const resumoCols = [{ label: 'Indicador', width: 46 }, { label: 'Valor', width: 20 }];
+  const resumoRows = [
+    ['Mês', monthName],
+    ['Unidade', unitName],
+    ['Total de membros na unidade', list.length],
+    ['Novos cadastros no mês', fresh.length],
+    ['Chegadas (data de entrada) no mês', arrived.length],
+    ['Batizados nas águas (novos do mês)', baptizedN],
+    ['Fizeram o Peniel (novos do mês)', penielN],
+    ['Querem servir (novos do mês)', serveN],
+    ['Aniversariantes do mês', bdays.length],
+    ['Acessos criados no mês', newAccess.length],
+    [],
+    ['Cadastros por unidade', ''],
+    ...myUnits().map(u => [UNITS[u].label, fresh.filter(m => m.unit === u).length]),
+    [],
+    ['Cadastros por status', ''],
+    ...Object.entries(STATUS).map(([k, v]) => [v.label, fresh.filter(m => m.status === k).length]),
+    [],
+    ['Cadastros por ministério', ''],
+    ...Object.entries(MINISTRIES).map(([k, v]) => [v.label, fresh.filter(m => (m.ministry || 'nenhum') === k).length]).filter(r => r[1] > 0),
+    [],
+    ['Últimos 12 meses', ''],
+    ...months.map(k => {
+      const [y, mo] = k.split('-').map(Number);
+      return [`${MONTHS[mo - 1]} de ${y}`, counts[k]];
+    })
+  ];
+
+  const mCols = [
+    { label: 'Nome', width: 34 }, { label: 'Unidade', width: 18 }, { label: 'Status', width: 16 },
+    { label: 'Ministério', width: 18 }, { label: 'Nascimento', width: 14 }, { label: 'Telefone', width: 18 },
+    { label: 'E-mail', width: 30 }, { label: 'Batizado', width: 12 }, { label: 'Entrada', width: 14 },
+    { label: 'Peniel', width: 10 }, { label: 'Quer servir', width: 12 },
+    { label: 'Endereço', width: 34 }, { label: 'Observações', width: 40 }
+  ];
+  const mRows = [...fresh]
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+    .map(m => [
+      m.name, UNITS[m.unit].label, STATUS[m.status].label, (MINISTRIES[m.ministry] || MINISTRIES.nenhum).label,
+      fmtDate(m.birth) === '—' ? '' : fmtDate(m.birth), m.phone || '', m.email || '', m.baptized ? 'Sim' : 'Não',
+      fmtDate(m.joined) === '—' ? '' : fmtDate(m.joined), m.peniel ? 'Sim' : 'Não', m.wantsWork ? 'Sim' : 'Não',
+      m.address || '', m.notes || ''
+    ]);
+
+  const bCols = [{ label: 'Nome', width: 34 }, { label: 'Unidade', width: 18 }, { label: 'Nascimento', width: 14 }, { label: 'Dia', width: 8 }];
+  const bRows = bdays.map(m => [m.name, UNITS[m.unit].label, fmtDate(m.birth), parseDate(m.birth).getDate()]);
+
+  const aCols = [{ label: 'Nome', width: 30 }, { label: 'E-mail', width: 34 }, { label: 'Nível', width: 20 }, { label: 'Unidades', width: 34 }, { label: 'Criado em', width: 14 }];
+  const aRows = newAccess.map(u => [
+    u.name, u.email, ROLE_LABEL[u.role] || 'Usuário',
+    (u.units || []).map(x => UNITS[x].label).join(', '), fmtDate((u.addedAt || '').slice(0, 10))
+  ]);
+
+  const sheets = [
+    { name: 'Resumo do mês', title: 'AMI INTEGRAÇÃO · RELATÓRIO MENSAL', subtitle, cols: resumoCols, rows: resumoRows, centerCols: [1], emptyNote: 'Sem dados neste mês.' },
+    { name: 'Novos membros', title: 'AMI INTEGRAÇÃO · NOVOS MEMBROS DO MÊS', subtitle, cols: mCols, rows: mRows, centerCols: [1, 2, 4, 5, 7, 8, 9, 10], emptyNote: 'Nenhum membro cadastrado neste mês.' },
+    { name: 'Aniversariantes', title: 'AMI INTEGRAÇÃO · ANIVERSARIANTES DO MÊS', subtitle, cols: bCols, rows: bRows, centerCols: [2, 3], emptyNote: 'Nenhum aniversariante neste mês.' },
+    { name: 'Acessos', title: 'AMI INTEGRAÇÃO · ACESSOS CRIADOS NO MÊS', subtitle, cols: aCols, rows: aRows, centerCols: [4], emptyNote: 'Nenhum acesso criado neste mês.' }
+  ];
+  const blob = new Blob([xlsxBuild(sheets)], { type: XLSX_MIME });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ami-relatorio-${selected}-${state.unit}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Relatório de ${monthName} exportado em Excel (.xlsx).`);
+}
+
+function printReport() {
+  const { monthName } = reportMonthData();
+  const prev = document.title;
+  document.body.classList.add('printing-report');
+  document.title = `AMI Integração · Relatório ${monthName}`;
+  const done = () => {
+    document.body.classList.remove('printing-report');
+    document.title = prev;
+    window.removeEventListener('afterprint', done);
+  };
+  window.addEventListener('afterprint', done);
+  window.print();
+  setTimeout(done, 1000);
 }
 
 /* ═════════ Render: membros ═════════ */
@@ -1733,6 +1842,8 @@ document.addEventListener('click', e => {
 
   const action = t.closest('[data-action]')?.dataset.action;
   if (action === 'new-member') { openForm(); return; }
+  if (action === 'export-report') { exportReport(); return; }
+  if (action === 'print-report') { printReport(); return; }
   const tplBtn = t.closest('[data-tpl]');
   if (tplBtn) {
     const input = $('#wa-msg');

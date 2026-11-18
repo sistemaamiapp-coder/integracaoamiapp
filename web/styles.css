@@ -791,6 +791,7 @@ body.modal-open{overflow:hidden}
 
 /* ═══════════ Relatório mensal (administradores) ═══════════ */
 .report-panel{margin-bottom:16px}
+.report-actions{display:flex;gap:10px;flex-wrap:wrap}
 .report-sub{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:16px 0 10px}
 .report-sub:first-of-type{margin-top:2px}
 .report-chart{display:flex;align-items:flex-end;gap:6px;height:230px;padding-top:6px;overflow-x:auto}
@@ -874,4 +875,36 @@ body.modal-open{overflow:hidden}
 .btn-primary{color:var(--site-on-accent)}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+}
+
+/* ═════════ Impressão do relatório mensal (PDF claro) ═════════ */
+@media print{
+  @page{margin:12mm}
+  html,body{background:#fff!important;color:#141414!important}
+  .system-bg,.login-screen,.sidebar,.topbar,.verse-bar,.toasts,.drawer,.drawer-overlay,.modal-overlay,#saveview-pop,.report-actions,.report-hint{display:none!important}
+  .main-col{margin-left:0!important}
+  .main{padding:0!important}
+  body.printing-report .view:not(#view-report){display:none!important}
+  body.printing-report #view-report{display:block!important;animation:none!important}
+  .view-head{margin-bottom:14px}
+  .view-title{color:#141414!important;font-size:22px}
+  .view-title .hl{color:#9E0B1E!important}
+  .view-title small{color:#555!important}
+  .stats{gap:10px;margin-bottom:12px}
+  .panel,.stat{background:#fff!important;border:1px solid #E3C6CA!important;box-shadow:none!important;break-inside:avoid;page-break-inside:avoid}
+  .stat::before{background:#C9151F!important}
+  .stat::after{display:none!important}
+  .stat-label,.stat-foot,.min-bar-label,.mini-info span,.report-col small,.report-hint,.panel-link{color:#555!important}
+  .stat-value,.min-bar-num,.mi-name,.panel-title,.panel-title b,.empty-note{color:#141414!important}
+  .panel-title svg{color:#9E0B1E!important}
+  .report-day{color:#9E0B1E!important}
+  .report-chart{height:170px}
+  .report-bar{opacity:1!important;background:#C9151F!important;box-shadow:none!important}
+  .report-col.selected{background:#FBE9EB!important}
+  .report-col.selected .report-bar{background:#9E0B1E!important}
+  .min-bar-track{background:#F2E4E6!important}
+  .min-bar-fill{background:#C9151F!important;box-shadow:none!important}
+  .badge{background:#fff!important;border:1px solid #BBB!important;color:#333!important}
+  .dash-grid{gap:12px}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
