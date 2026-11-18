@@ -1722,7 +1722,6 @@ $('#login-form').addEventListener('submit', loginSubmit);
 $('#login-email').addEventListener('input', () => {
   if (loginSetup && normEmail($('#login-email').value) !== GENERAL_ADMIN.email) setLoginSetup(false);
 });
-$('#btn-new-top').addEventListener('click', () => openForm());
 $('#btn-logout').addEventListener('click', signOut);
 $('#form-close').addEventListener('click', closeForm);
 $('#form-cancel').addEventListener('click', closeForm);

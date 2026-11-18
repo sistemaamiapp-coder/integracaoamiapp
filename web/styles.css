@@ -205,15 +205,15 @@ svg{fill:currentColor;width:20px;height:20px;flex:none}
   display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 26px;
   background:rgba(8,8,9,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
 }
-.unit-switch{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px}
+.unit-switch{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:4px;flex:1;max-width:680px;margin:0 auto;min-width:0}
 .unit-btn{
-  display:flex;align-items:center;gap:7px;padding:7px 15px;border-radius:8px;font-size:13px;font-weight:600;
-  color:var(--muted);transition:all .18s;white-space:nowrap;
+  display:flex;align-items:center;justify-content:center;gap:7px;padding:7px 15px;border-radius:8px;font-size:13px;font-weight:600;
+  color:var(--muted);transition:all .18s;white-space:nowrap;flex:1;min-width:0;
 }
+.unit-btn[hidden]{display:none}
 .unit-btn:hover{color:var(--ink)}
 .unit-btn.active{background:linear-gradient(135deg,var(--red),var(--red-deep));color:#fff;box-shadow:0 3px 14px var(--red-glow)}
 .unit-btn.active .dot{background:#fff;box-shadow:none}
-.topbar-right{display:flex;align-items:center;gap:10px}
 
 .btn{
   display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:13.5px;
@@ -633,7 +633,8 @@ body.modal-open{overflow:hidden}
   .side-user-info{display:none}
   .main-col{margin-left:0;padding-bottom:70px}
   .topbar{padding:0 14px;height:auto;min-height:var(--topbar-h);flex-wrap:wrap;padding-top:8px;padding-bottom:8px;gap:8px}
-  .unit-btn{padding:7px 10px;font-size:12px}
+  .unit-switch{flex-basis:100%;max-width:none;order:2;justify-content:center}
+  .unit-btn{flex:0 1 auto;padding:7px 10px;font-size:12px}
   .main{padding:16px 14px}
   .verse-bar{margin:10px 14px 0;padding:10px 14px}
   .verse-bar-text{font-size:17px}
@@ -645,8 +646,6 @@ body.modal-open{overflow:hidden}
   .stat-value{font-size:30px}
   .form-grid{grid-template-columns:1fr;padding:18px}
   .detail-grid{grid-template-columns:1fr}
-  .btn#btn-new-top span{display:none}
-  .btn#btn-new-top{padding:10px 12px}
   .view-title{font-size:24px}
   .hero{background-size:92px auto;background-position:right 10px center}
   .hero::after{background-size:92px auto;background-position:right 10px center}
