@@ -28,13 +28,21 @@ export function applicationPath(request) {
 }
 
 // Mesma origem obrigatória para métodos que alteram dados (somado ao cookie SameSite=Lax).
+// Na hospedagem, request.url é a URL interna do gateway; por isso a origem pública
+// do site precisa estar na lista (o navegador envia sempre o endereço público).
+const ALLOWED_ORIGINS = new Set([
+  'https://ami-integracao-f04w9wpuzyz.qoder.website',
+  'http://localhost:8124',
+  'http://127.0.0.1:8124',
+]);
+
 export function requireSameOrigin(request) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return;
   const origin = request.headers.get('origin');
   if (!origin) return;
   let expected;
   try { expected = new URL(request.url).origin; } catch { throw new AppError('invalid_origin', 403); }
-  if (origin !== expected) throw new AppError('origin_forbidden', 403);
+  if (origin !== expected && !ALLOWED_ORIGINS.has(origin)) throw new AppError('origin_forbidden', 403);
 }
 
 export async function readJson(request, maxBytes = BODY_LIMIT_BYTES) {
