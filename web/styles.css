@@ -41,17 +41,12 @@ svg{fill:currentColor;width:20px;height:20px;flex:none}
 
 ::selection{background:var(--red);color:#fff}
 
-/* fundo do sistema com a marca AMI */
+/* fundo do sistema */
 .system-bg{
   position:fixed;inset:0;z-index:0;pointer-events:none;
   background:
     radial-gradient(ellipse 80% 55% at 50% 0%, rgba(201,21,31,.05), transparent 70%),
     #050506;
-}
-.system-mark{
-  position:fixed;inset:0;z-index:0;pointer-events:none;
-  background:url('assets/ami-logo.png') center 34%/min(62vh,600px) no-repeat;
-  opacity:.08;
 }
 
 .brand-script{font-family:var(--font-script);font-weight:700;color:#fff;line-height:.9}
@@ -74,11 +69,6 @@ svg{fill:currentColor;width:20px;height:20px;flex:none}
   background:
     radial-gradient(ellipse 70% 55% at 50% 18%, transparent 20%, rgba(3,3,4,.6) 75%),
     linear-gradient(180deg, rgba(3,3,4,.3) 0%, rgba(3,3,4,.75) 55%, rgba(3,3,4,.95) 100%);
-}
-.login-mark{
-  position:absolute;inset:0;pointer-events:none;
-  background:url('assets/ami-logo.png') center 44%/min(76vh,700px) no-repeat;
-  opacity:.1;
 }
 .login-embers{position:absolute;inset:0;pointer-events:none;overflow:hidden}
 .ember{
