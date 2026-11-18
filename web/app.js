@@ -254,6 +254,7 @@ const state = {
   view: 'dashboard',
   search: '', status: 'todos', ministry: 'todos', sort: 'name',
   bmonth: new Date().getMonth(),
+  reportMonth: null,
   waSearch: '', waMsg: '',
   selected: new Set(),
   savedViews: store.get('ami.savedViews', [])
@@ -427,8 +428,10 @@ function renderAll() {
   clampUnit();
   const allowed = myUnits();
   $('#nav-admins').hidden = !manage;
+  $('#nav-report').hidden = !manage;
   $('#nav-admin-count').textContent = users.length + 1;
   if (state.view === 'admins' && !manage) state.view = 'dashboard';
+  if (state.view === 'report' && !manage) state.view = 'dashboard';
   $$('.side-link').forEach(b => b.classList.toggle('active', b.dataset.nav === state.view));
   $$('.unit-btn').forEach(b => {
     const key = b.dataset.unit;
@@ -440,11 +443,13 @@ function renderAll() {
   $('#view-members').hidden = state.view !== 'members';
   $('#view-birthdays').hidden = state.view !== 'birthdays';
   $('#view-whatsapp').hidden = state.view !== 'whatsapp';
+  $('#view-report').hidden = state.view !== 'report';
   $('#view-admins').hidden = state.view !== 'admins';
   if (state.view === 'dashboard') renderDashboard();
   else if (state.view === 'members') renderMembers();
   else if (state.view === 'birthdays') renderBirthdays();
   else if (state.view === 'whatsapp') renderWhatsapp();
+  else if (state.view === 'report') renderReport();
   else renderUsers();
 }
 
@@ -575,6 +580,176 @@ function renderDashboard() {
     setTimeout(apply, 150);
   });
   $$('#view-dashboard .stat-value').forEach(el => {
+    const target = +el.dataset.count;
+    const t0 = performance.now();
+    const tick = t => {
+      const p = Math.min(1, (t - t0) / 650);
+      el.textContent = Math.round(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    setTimeout(() => { el.textContent = target; }, 800);
+  });
+}
+
+/* ═════════ Render: relatório mensal (administradores) ═════════ */
+function monthKeyOf(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+function shiftMonthKey(key, delta) {
+  const [y, m] = key.split('-').map(Number);
+  return monthKeyOf(new Date(y, m - 1 + delta, 1));
+}
+
+function renderReport() {
+  const list = unitMembers();
+  const current = monthKeyOf(new Date());
+  const months = [];
+  for (let i = 11; i >= 0; i--) months.push(shiftMonthKey(current, -i));
+  if (!months.includes(state.reportMonth)) state.reportMonth = current;
+  const selected = state.reportMonth;
+
+  const counts = {};
+  months.forEach(k => { counts[k] = 0; });
+  list.forEach(m => {
+    const k = (m.createdAt || '').slice(0, 7);
+    if (k in counts) counts[k] += 1;
+  });
+  const peak = Math.max(1, ...months.map(k => counts[k]));
+  const yearTotal = months.reduce((n, k) => n + counts[k], 0);
+
+  const [sy, sm] = selected.split('-').map(Number);
+  const monthName = `${MONTHS[sm - 1]} de ${sy}`;
+  const fresh = list.filter(m => (m.createdAt || '').slice(0, 7) === selected);
+  const arrived = list.filter(m => (m.joined || '').slice(0, 7) === selected);
+  const baptizedN = fresh.filter(m => m.baptized).length;
+  const penielN = fresh.filter(m => m.peniel).length;
+  const serveN = fresh.filter(m => m.wantsWork).length;
+
+  const statCard = (label, value, color, icon, foot) => `
+    <div class="stat" style="--sc:${color}">
+      <div class="stat-label">${icon}${label}</div>
+      <div class="stat-value" data-count="${value}">0</div>
+      <div class="stat-foot">${foot}</div>
+    </div>`;
+
+  const withPct = rows => {
+    const max = Math.max(1, ...rows.map(r => r.n));
+    return rows.map(r => ({ ...r, pct: r.n / max * 100 }));
+  };
+  const barRows = rows => rows.map(r => `
+    <div class="min-bar-row">
+      <span class="min-bar-label">${r.label}</span>
+      <div class="min-bar-track"><div class="min-bar-fill" style="--mc:${r.color}" data-w="${r.pct.toFixed(1)}"></div></div>
+      <span class="min-bar-num">${r.n}</span>
+    </div>`).join('');
+  const noData = '<p class="empty-note">Nenhum cadastro no mês.</p>';
+
+  const unitRows = withPct(myUnits().map(u => ({
+    label: UNITS[u].label, color: UNITS[u].color, n: fresh.filter(m => m.unit === u).length
+  })));
+  const statusRows = withPct(Object.entries(STATUS).map(([k, v]) => ({
+    label: v.label,
+    color: k === 'ativo' ? 'var(--success)' : k === 'integracao' ? 'var(--warning)' : 'var(--info)',
+    n: fresh.filter(m => m.status === k).length
+  })));
+  const ministryRows = withPct(Object.entries(MINISTRIES)
+    .map(([k, v]) => ({ label: v.label, color: v.color, n: fresh.filter(m => (m.ministry || 'nenhum') === k).length }))
+    .filter(r => r.n > 0).sort((a, b) => b.n - a.n));
+  const anyUnit = unitRows.some(r => r.n);
+  const anyStatus = statusRows.some(r => r.n);
+
+  const bdays = list
+    .filter(m => m.birth && parseDate(m.birth).getMonth() === sm - 1)
+    .sort((a, b) => parseDate(a.birth).getDate() - parseDate(b.birth).getDate());
+  const scope = myUnits();
+  const newAccess = users.filter(u => (u.addedAt || '').slice(0, 7) === selected
+    && (isGeneral() || (u.units || []).some(x => scope.includes(x))));
+
+  $('#view-report').innerHTML = `
+    <div class="view-head">
+      <h1 class="view-title">RELATÓRIO MENSAL <span class="hl">· PARA APRESENTAÇÕES</span>
+        <small>${esc(unitLabel(state.unit))} · o que aconteceu em ${monthName}. Visível apenas para administradores.</small>
+      </h1>
+    </div>
+    <div class="stats">
+      ${statCard('Cadastros em ' + MONTHS_SHORT[sm - 1], fresh.length, 'var(--red-hot)', SVG_PLUS, `novos membros em ${monthName}`)}
+      ${statCard('Batizados nas águas', baptizedN, 'var(--success)', SVG_HEART, 'entre os novos do mês')}
+      ${statCard('Fizeram o Peniel', penielN, 'var(--warning)', SVG_PENIEL, 'entre os novos do mês')}
+      ${statCard('Querem servir', serveN, 'var(--info)', SVG_HEART, 'entre os novos do mês')}
+    </div>
+    <div class="panel report-panel">
+      <div class="panel-title">${SVG_CHART} Cadastros por mês
+        <span class="panel-link" style="cursor:default">últimos 12 meses · ${yearTotal} no total</span>
+      </div>
+      <div class="report-chart">
+        ${months.map(k => {
+          const [y, mo] = k.split('-').map(Number);
+          const n = counts[k];
+          const h = Math.max(3, Math.round(n / peak * 100));
+          return `<button class="report-col ${k === selected ? 'selected' : ''}" data-rmonth="${k}" type="button" title="${MONTHS[mo - 1]} de ${y}: ${n} cadastro${n === 1 ? '' : 's'}">
+            <span class="report-value">${n}</span>
+            <span class="report-track"><span class="report-bar" style="height:${h}%"></span></span>
+            <small>${MONTHS_SHORT[mo - 1]}${mo === 1 ? '/' + String(y).slice(2) : ''}</small>
+          </button>`;
+        }).join('')}
+      </div>
+      <p class="report-hint">Toque em um mês do gráfico para ver os detalhes. ${arrived.length ? `<b>${arrived.length}</b> membro(s) com data de entrada em ${MONTHS[sm - 1]}.` : ''}</p>
+    </div>
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-title">${SVG_CHART} ${monthName} em detalhes</div>
+        <div class="report-sub">Novos cadastros por unidade</div>
+        ${anyUnit ? barRows(unitRows) : noData}
+        <div class="report-sub">Por status</div>
+        ${anyStatus ? barRows(statusRows) : noData}
+        <div class="report-sub">Por ministério</div>
+        ${ministryRows.length ? barRows(ministryRows) : noData}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;min-width:0">
+        <div class="panel">
+          <div class="panel-title">${SVG_HEART} Aniversariantes de ${MONTHS[sm - 1]}</div>
+          <div class="mini-list">
+            ${bdays.length ? bdays.map(m => {
+              const day = parseDate(m.birth).getDate();
+              return `<div class="mini-row" data-open="${m.id}">
+                ${avatarHTML(m.name, 'avatar-sm')}
+                <div class="mini-info"><b><span class="mi-name">${esc(m.name)}</span></b><span>${UNITS[m.unit].label}</span></div>
+                <span class="report-day">dia ${String(day).padStart(2, '0')}</span>
+              </div>`;
+            }).join('') : '<p class="empty-note">Nenhum aniversariante neste mês.</p>'}
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">${SVG_SHIELD} Acessos criados no mês</div>
+          <div class="mini-list">
+            ${newAccess.length ? newAccess.map(u => `
+              <div class="mini-row">
+                ${avatarHTML(u.name, 'avatar-sm')}
+                <div class="mini-info"><b><span class="mi-name">${esc(u.name)}</span></b><span>${ROLE_LABEL[u.role] || 'Usuário'} · ${esc(u.email)}</span></div>
+              </div>`).join('') : '<p class="empty-note">Nenhum acesso criado neste mês.</p>'}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-title">${SVG_PERSON} Novos membros de ${monthName}
+        <span class="panel-link" style="cursor:default">${fresh.length} cadastro${fresh.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="mini-list">
+        ${fresh.length ? [...fresh].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')).map(m => `
+          <div class="mini-row" data-open="${m.id}">
+            ${avatarHTML(m.name, 'avatar-sm')}
+            <div class="mini-info"><b><span class="mi-name">${esc(m.name)}</span></b><span>${UNITS[m.unit].label} · cadastro em ${fmtDate((m.createdAt || '').slice(0, 10))}</span></div>
+            ${statusBadge(m.status)}
+          </div>`).join('') : '<p class="empty-note">Nenhum membro cadastrado neste mês.</p>'}
+      </div>
+    </div>`;
+
+  $$('#view-report .min-bar-fill').forEach(el => {
+    const apply = () => { el.style.width = el.dataset.w + '%'; };
+    requestAnimationFrame(apply);
+    setTimeout(apply, 150);
+  });
+  $$('#view-report .stat-value').forEach(el => {
     const target = +el.dataset.count;
     const t0 = performance.now();
     const tick = t => {
@@ -1208,6 +1383,7 @@ const SVG_PERSON = '<svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-
 const SVG_HEART = '<svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>';
 const SVG_PENIEL = '<svg viewBox="0 0 24 24"><path d="M13.5 0.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67zM11.71 19c-1.78 0-3.22-1.4-3.22-3.14 0-1.62 1.05-2.76 2.81-3.12 1.77-.36 3.6-1.21 4.62-2.58.39 1.29.59 2.65.59 4.04 0 2.65-2.15 4.8-4.8 4.8z"/></svg>';
 const SVG_CHAT = '<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>';
+const SVG_CHART = '<svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z"/></svg>';
 
 const ROLE_LABEL = { geral: 'Administrador geral', admin: 'Administrador', user: 'Usuário' };
 let editingUserId = null;
@@ -1493,6 +1669,9 @@ document.addEventListener('click', e => {
 
   const monthBtn = t.closest('[data-month]');
   if (monthBtn) { state.bmonth = +monthBtn.dataset.month; renderBirthdays(); return; }
+
+  const rmonthBtn = t.closest('[data-rmonth]');
+  if (rmonthBtn) { state.reportMonth = rmonthBtn.dataset.rmonth; renderReport(); return; }
 
   const editBtn = t.closest('[data-edit]');
   if (editBtn) { e.stopPropagation(); openForm(editBtn.dataset.edit); return; }

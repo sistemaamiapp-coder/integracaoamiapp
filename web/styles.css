@@ -789,6 +789,33 @@ body.modal-open{overflow:hidden}
 .admin-units .flag-chip{font-size:9.5px;padding:2px 7px;letter-spacing:.03em;text-transform:none}
 .admin-units .flag-chip svg{width:11px;height:11px}
 
+/* ═══════════ Relatório mensal (administradores) ═══════════ */
+.report-panel{margin-bottom:16px}
+.report-sub{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:16px 0 10px}
+.report-sub:first-of-type{margin-top:2px}
+.report-chart{display:flex;align-items:flex-end;gap:6px;height:230px;padding-top:6px;overflow-x:auto}
+.report-col{
+  flex:1;min-width:42px;height:100%;display:flex;flex-direction:column;align-items:center;gap:6px;
+  background:none;border:0;padding:4px 0 2px;border-radius:10px;cursor:pointer;color:var(--muted);
+  transition:background .18s;
+}
+.report-col:hover{background:rgba(255,255,255,.04)}
+.report-col.selected{background:rgba(201,21,31,.1)}
+.report-value{font-size:12px;font-weight:700;color:var(--ink)}
+.report-track{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;min-height:0}
+.report-bar{
+  width:min(34px,72%);border-radius:7px 7px 2px 2px;
+  background:linear-gradient(180deg,var(--red-hot),var(--red-deep));
+  opacity:.5;transition:opacity .18s,height .35s;
+}
+.report-col:hover .report-bar{opacity:.8}
+.report-col.selected .report-bar{opacity:1;box-shadow:0 0 14px var(--red-glow)}
+.report-col small{font-size:10.5px;font-weight:600;color:var(--faint);white-space:nowrap}
+.report-col.selected small{color:var(--ink)}
+.report-hint{font-size:11.5px;color:var(--faint);margin-top:10px;line-height:1.5}
+.report-hint b{color:var(--ink)}
+.report-day{font-size:11.5px;font-weight:700;color:var(--red-hot);white-space:nowrap}
+
 /* ═══════════ Contato via WhatsApp ═══════════ */
 .wa-tools{
   display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;
