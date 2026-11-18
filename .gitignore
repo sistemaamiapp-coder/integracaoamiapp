@@ -6,3 +6,12 @@ vibe_images/
 
 # Scripts temporários de verificação
 _*.mjs
+
+# Teste local da API em memória
+dev/
+
+# Saída de build do Qoder Sites (publicada pela plataforma)
+dist/
+
+# Metadados gerados pelo Qoder Sites
+*.qoder.site
