@@ -715,6 +715,25 @@ body.modal-open{overflow:hidden}
 .perm-ico.role-user{background:rgba(43,217,232,.12)}
 .perm-row b{display:block;font-size:13px}
 .perm-row div span{font-size:12px;color:var(--muted);line-height:1.5}
+.opt-hint{margin-top:0}
+.opt-group{padding:10px 0}
+.opt-group + .opt-group{border-top:1px solid var(--line)}
+.opt-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.opt-group-head b{font-size:12.5px;letter-spacing:.02em}
+.opt-rows{display:flex;flex-direction:column;gap:6px}
+.opt-row{display:flex;align-items:center;gap:8px}
+.opt-row input[type=color]{
+  width:30px;height:30px;flex:none;padding:2px;border:1px solid var(--line);border-radius:8px;
+  background:var(--surface-2);cursor:pointer;
+}
+.opt-row input[type=text]{
+  flex:1;min-width:0;height:30px;padding:0 10px;border:1px solid var(--line);border-radius:8px;
+  background:var(--surface-2);color:var(--ink);font-size:12.5px;
+}
+.opt-row input[type=text]:focus{outline:none;border-color:var(--cyan)}
+.opt-use{font-size:11px;color:var(--faint);white-space:nowrap;min-width:64px;text-align:right}
+.opt-row .icon-btn:disabled{opacity:.35;cursor:not-allowed}
+.opt-row .icon-btn:disabled:hover{color:inherit;background:none}
 @media (max-width:1100px){.admin-grid{grid-template-columns:1fr}}
 @media (max-width:640px){
   .lbl-long{display:none}

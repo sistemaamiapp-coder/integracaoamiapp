@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Caveat:wght@600;700&family=Sora:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="styles.css?v=9">
 </head>
 <body>
 <div class="system-bg" aria-hidden="true"></div>
@@ -160,11 +160,7 @@
           </select>
         </label>
         <label>Status
-          <select name="status">
-            <option value="ativo">Ativo</option>
-            <option value="integracao">Em integração</option>
-            <option value="visitante">Visitante</option>
-          </select>
+          <select name="status" id="form-status"></select>
         </label>
         <label>Ministério
           <select name="ministry" id="form-ministry"></select>
@@ -225,6 +221,6 @@
 
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
-<script src="app.js?v=8"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

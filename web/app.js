@@ -75,21 +75,43 @@ const UNITS = {
   pacheco:    { label: 'AMI Pacheco',    color: 'var(--pacheco)' },
   amendoeira: { label: 'AMI Amendoeira', color: 'var(--amendoeira)' }
 };
-const STATUS = {
-  ativo:      { label: 'Ativo',          cls: 'badge-ativo' },
-  integracao: { label: 'Em integração',  cls: 'badge-integracao' },
-  visitante:  { label: 'Visitante',      cls: 'badge-visitante' }
-};
-const MINISTRIES = {
-  louvor:      { label: 'Louvor',       color: '#FF3B52' },
-  midia:       { label: 'Mídia',        color: '#3D8BFD' },
-  recepcao:    { label: 'Recepção',     color: '#FFB020' },
-  infantil:    { label: 'Infantil',     color: '#2ECC71' },
-  intercessao: { label: 'Intercessão',  color: '#9B6BFF' },
-  diaconia:    { label: 'Diaconia',     color: '#2BD9E8' },
-  jovens:      { label: 'Jovens',       color: '#F04BD8' },
-  nenhum:      { label: 'Sem ministério', color: '#B79A9A' }
-};
+const DEFAULT_STATUSES = [
+  { key: 'ativo', label: 'Ativo', color: '#2ECC71' },
+  { key: 'integracao', label: 'Em integração', color: '#FFB020' },
+  { key: 'visitante', label: 'Visitante', color: '#3D8BFD' }
+];
+const DEFAULT_MINISTRIES = [
+  { key: 'louvor', label: 'Louvor', color: '#FF3B52' },
+  { key: 'midia', label: 'Mídia', color: '#3D8BFD' },
+  { key: 'recepcao', label: 'Recepção', color: '#FFB020' },
+  { key: 'infantil', label: 'Infantil', color: '#2ECC71' },
+  { key: 'intercessao', label: 'Intercessão', color: '#9B6BFF' },
+  { key: 'diaconia', label: 'Diaconia', color: '#2BD9E8' },
+  { key: 'jovens', label: 'Jovens', color: '#F04BD8' },
+  { key: 'nenhum', label: 'Sem ministério', color: '#B79A9A' }
+];
+function statusList() {
+  const list = state.options && state.options.statuses;
+  return Array.isArray(list) && list.length ? list : DEFAULT_STATUSES;
+}
+function ministryList() {
+  const list = state.options && state.options.ministries;
+  return Array.isArray(list) && list.length ? list : DEFAULT_MINISTRIES;
+}
+function statusInfo(key) {
+  return statusList().find(s => s.key === key) || { key, label: String(key || '—'), color: '#B79A9A' };
+}
+function ministryInfo(key) {
+  return ministryList().find(m => m.key === key)
+    || ministryList().find(m => m.key === 'nenhum')
+    || { key: 'nenhum', label: 'Sem ministério', color: '#B79A9A' };
+}
+function hexAlpha(hex, alpha) {
+  const v = String(hex || '').replace('#', '');
+  if (!/^[0-9a-f]{6}$/i.test(v)) return `rgba(183,154,154,${alpha})`;
+  const n = parseInt(v, 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
 const AV_COLORS = [
   ['#E8112D','#7A0918'], ['#FF7A1A','#8F3A00'], ['#3D8BFD','#123C8F'],
   ['#2ECC71','#0E6B3A'], ['#9B6BFF','#4A2396'], ['#F04BD8','#7C1170'],
@@ -146,8 +168,11 @@ function avatarHTML(name, cls = '') {
 }
 function unitLabel(u) { return u === 'all' ? 'Todas as unidades' : UNITS[u].label; }
 function unitBadge(u) { return `<span class="badge-unit badge-${u}"><i class="dot dot-${u}"></i>${UNITS[u].label}</span>`; }
-function statusBadge(s) { return `<span class="badge ${STATUS[s].cls}">${STATUS[s].label}</span>`; }
-function minChip(m) { const mi = MINISTRIES[m] || MINISTRIES.nenhum; return `<span class="chip-min" style="--mc:${mi.color}">${mi.label}</span>`; }
+function statusBadge(s) {
+  const info = statusInfo(s);
+  return `<span class="badge" style="background:${hexAlpha(info.color, 0.13)};color:${info.color}">${esc(info.label)}</span>`;
+}
+function minChip(m) { const mi = ministryInfo(m); return `<span class="chip-min" style="--mc:${mi.color}">${esc(mi.label)}</span>`; }
 function memberFlags(m, cls = '') {
   const out = [];
   if (m.peniel) out.push(`<span class="flag-chip peniel">${SVG_PENIEL} Peniel</span>`);
@@ -250,6 +275,7 @@ function clampUnit() {
 
 const state = {
   user: null,
+  options: null,
   unit: 'all',
   view: 'dashboard',
   search: '', status: 'todos', ministry: 'todos', sort: 'name',
@@ -347,6 +373,18 @@ function setLoginSetup(on) {
     : 'Acesso restrito. Sua conta funciona em qualquer aparelho: entre com o seu e-mail e a sua senha.';
 }
 
+function normalizeOptions(raw) {
+  const clean = list => Array.isArray(list)
+    ? list.filter(o => o && typeof o.key === 'string' && typeof o.label === 'string' && o.label)
+      .map(o => ({ key: o.key, label: o.label, color: /^#[0-9a-f]{6}$/i.test(o.color || '') ? o.color : '#B79A9A' }))
+    : [];
+  if (!raw || typeof raw !== 'object') return null;
+  const statuses = clean(raw.statuses);
+  const ministries = clean(raw.ministries);
+  if (!statuses.length || !ministries.length) return null;
+  return { statuses, ministries };
+}
+
 function applyState(data) {
   state.user = {
     id: data.user.id,
@@ -357,6 +395,7 @@ function applyState(data) {
   };
   users = (Array.isArray(data.users) ? data.users : []).map(u => ({ ...u }));
   replaceMembers(data.members);
+  state.options = normalizeOptions(data.options);
   clampUnit();
 }
 
@@ -463,8 +502,8 @@ function renderDashboard() {
   const novos = list.filter(m => (m.joined || '').startsWith(ym)).length;
   const bdayMonth = birthdayEntries().filter(e => parseDate(e.birth).getMonth() === now.getMonth()).length;
 
-  const minCounts = Object.keys(MINISTRIES)
-    .map(k => ({ k, n: list.filter(m => m.ministry === k).length }))
+  const minCounts = ministryList()
+    .map(m => ({ k: m.key, n: list.filter(x => (x.ministry || 'nenhum') === m.key).length }))
     .filter(x => x.n > 0).sort((a, b) => b.n - a.n);
   const maxMin = Math.max(1, ...minCounts.map(x => x.n));
 
@@ -503,8 +542,8 @@ function renderDashboard() {
         </div>
         ${minCounts.length ? minCounts.map(x => `
           <div class="min-bar-row">
-            <span class="min-bar-label">${MINISTRIES[x.k].label}</span>
-            <div class="min-bar-track"><div class="min-bar-fill" style="--mc:${MINISTRIES[x.k].color}" data-w="${(x.n / maxMin * 100).toFixed(1)}"></div></div>
+            <span class="min-bar-label">${esc(ministryInfo(x.k).label)}</span>
+            <div class="min-bar-track"><div class="min-bar-fill" style="--mc:${ministryInfo(x.k).color}" data-w="${(x.n / maxMin * 100).toFixed(1)}"></div></div>
             <span class="min-bar-num">${x.n}</span>
           </div>`).join('') : '<p class="empty-note">Nenhum membro nesta unidade ainda.</p>'}
         <div class="unit-split">
@@ -657,13 +696,13 @@ function renderReport() {
   const unitRows = withPct(myUnits().map(u => ({
     label: UNITS[u].label, color: UNITS[u].color, n: fresh.filter(m => m.unit === u).length
   })));
-  const statusRows = withPct(Object.entries(STATUS).map(([k, v]) => ({
-    label: v.label,
-    color: k === 'ativo' ? 'var(--success)' : k === 'integracao' ? 'var(--warning)' : 'var(--info)',
-    n: fresh.filter(m => m.status === k).length
+  const statusRows = withPct(statusList().map(s => ({
+    label: s.label,
+    color: s.color,
+    n: fresh.filter(m => m.status === s.key).length
   })));
-  const ministryRows = withPct(Object.entries(MINISTRIES)
-    .map(([k, v]) => ({ label: v.label, color: v.color, n: fresh.filter(m => (m.ministry || 'nenhum') === k).length }))
+  const ministryRows = withPct(ministryList()
+    .map(m => ({ label: m.label, color: m.color, n: fresh.filter(x => (x.ministry || 'nenhum') === m.key).length }))
     .filter(r => r.n > 0).sort((a, b) => b.n - a.n));
   const anyUnit = unitRows.some(r => r.n);
   const anyStatus = statusRows.some(r => r.n);
@@ -804,10 +843,10 @@ function exportReport() {
     ...myUnits().map(u => [UNITS[u].label, fresh.filter(m => m.unit === u).length]),
     [],
     ['Cadastros por status', ''],
-    ...Object.entries(STATUS).map(([k, v]) => [v.label, fresh.filter(m => m.status === k).length]),
+    ...statusList().map(s => [s.label, fresh.filter(m => m.status === s.key).length]),
     [],
     ['Cadastros por ministério', ''],
-    ...Object.entries(MINISTRIES).map(([k, v]) => [v.label, fresh.filter(m => (m.ministry || 'nenhum') === k).length]).filter(r => r[1] > 0),
+    ...ministryList().map(m => [m.label, fresh.filter(x => (x.ministry || 'nenhum') === m.key).length]).filter(r => r[1] > 0),
     [],
     ['Últimos 12 meses', ''],
     ...months.map(k => {
@@ -826,7 +865,7 @@ function exportReport() {
   const mRows = [...fresh]
     .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
     .map(m => [
-      m.name, UNITS[m.unit].label, STATUS[m.status].label, (MINISTRIES[m.ministry] || MINISTRIES.nenhum).label,
+      m.name, UNITS[m.unit].label, statusInfo(m.status).label, ministryInfo(m.ministry).label,
       fmtDate(m.birth) === '—' ? '' : fmtDate(m.birth), m.phone || '', m.email || '', m.baptized ? 'Sim' : 'Não',
       fmtDate(m.joined) === '—' ? '' : fmtDate(m.joined), m.peniel ? 'Sim' : 'Não', m.wantsWork ? 'Sim' : 'Não',
       m.address || '', m.notes || ''
@@ -873,7 +912,7 @@ function printReport() {
 
 /* ═════════ Render: membros ═════════ */
 function renderMembers() {
-  const minOptions = Object.entries(MINISTRIES).map(([k, v]) => `<option value="${k}" ${state.ministry === k ? 'selected' : ''}>${v.label}</option>`).join('');
+  const minOptions = ministryList().map(m => `<option value="${m.key}" ${state.ministry === m.key ? 'selected' : ''}>${esc(m.label)}</option>`).join('');
   $('#view-members').innerHTML = `
     <div class="view-head">
       <h1 class="view-title">MEMBROS <span class="hl">· ${esc(unitLabel(state.unit).toUpperCase())}</span>
@@ -893,7 +932,7 @@ function renderMembers() {
       <div class="select-wrap">
         <select id="filter-status" aria-label="Filtrar por status">
           <option value="todos" ${state.status === 'todos' ? 'selected' : ''}>Todos os status</option>
-          ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}" ${state.status === k ? 'selected' : ''}>${v.label}</option>`).join('')}
+          ${statusList().map(s => `<option value="${s.key}" ${state.status === s.key ? 'selected' : ''}>${esc(s.label)}</option>`).join('')}
         </select>
       </div>
       <div class="select-wrap">
@@ -950,7 +989,7 @@ function updateMemberList() {
       <div class="select-wrap">
         <select id="bulk-status" aria-label="Alterar status">
           <option value="">Status…</option>
-          ${Object.entries(STATUS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('')}
+          ${statusList().map(s => `<option value="${s.key}">${esc(s.label)}</option>`).join('')}
         </select>
       </div>
       <button class="btn btn-danger btn-sm" data-action="bulk-delete" type="button">
@@ -1174,7 +1213,8 @@ function openForm(id = null) {
   form.reset();
   $$('#member-form .field-err').forEach(e => e.classList.remove('show'));
   $$('#member-form input').forEach(i => i.classList.remove('invalid'));
-  $('#form-ministry').innerHTML = Object.entries(MINISTRIES).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
+  $('#form-status').innerHTML = statusList().map(s => `<option value="${s.key}">${esc(s.label)}</option>`).join('');
+  $('#form-ministry').innerHTML = ministryList().map(m => `<option value="${m.key}">${esc(m.label)}</option>`).join('');
   form.elements.unit.innerHTML = myUnits().map(u => `<option value="${u}">${UNITS[u].label}</option>`).join('');
   const m = id ? members.find(x => x.id === id) : null;
   $('#form-title').textContent = m ? 'Editar membro' : 'Novo membro';
@@ -1416,8 +1456,8 @@ function exportExcel() {
   if (!list.length) { toast('Nada para exportar com os filtros atuais.', { type: 'info' }); return; }
   const stamp = new Date().toISOString().slice(0, 10);
   const fparts = [];
-  if (state.status !== 'todos') fparts.push('Status: ' + STATUS[state.status].label);
-  if (state.ministry !== 'todos') fparts.push('Ministério: ' + (MINISTRIES[state.ministry] || MINISTRIES.nenhum).label);
+  if (state.status !== 'todos') fparts.push('Status: ' + statusInfo(state.status).label);
+  if (state.ministry !== 'todos') fparts.push('Ministério: ' + ministryInfo(state.ministry).label);
   if (state.search.trim()) fparts.push('Busca: “' + state.search.trim() + '”');
   const ftxt = fparts.length ? ' · Filtros: ' + fparts.join(' | ') : '';
   const mCols = [
@@ -1428,7 +1468,7 @@ function exportExcel() {
     { label: 'Endereço', width: 34 }, { label: 'Observações', width: 40 }
   ];
   const mRows = list.map(m => [
-    m.name, UNITS[m.unit].label, STATUS[m.status].label, (MINISTRIES[m.ministry] || MINISTRIES.nenhum).label,
+    m.name, UNITS[m.unit].label, statusInfo(m.status).label, ministryInfo(m.ministry).label,
     fmtDate(m.birth) === '—' ? '' : fmtDate(m.birth), m.phone || '', m.email || '', m.baptized ? 'Sim' : 'Não',
     fmtDate(m.joined) === '—' ? '' : fmtDate(m.joined), m.peniel ? 'Sim' : 'Não', m.wantsWork ? 'Sim' : 'Não',
     m.address || '', m.notes || ''
@@ -1453,7 +1493,7 @@ function renderSavedViewsMenu() {
     ${state.savedViews.length ? state.savedViews.map(v => `
       <div class="sv-item">
         <button class="sv-apply" data-sv-apply="${v.id}" type="button">${esc(v.name)}
-          <span class="sv-meta">${esc(unitLabel(v.unit))}${v.status !== 'todos' ? ' · ' + STATUS[v.status].label : ''}${v.ministry !== 'todos' ? ' · ' + MINISTRIES[v.ministry].label : ''}${v.search ? ` · “${esc(v.search)}”` : ''}</span>
+          <span class="sv-meta">${esc(unitLabel(v.unit))}${v.status !== 'todos' ? ' · ' + statusInfo(v.status).label : ''}${v.ministry !== 'todos' ? ' · ' + ministryInfo(v.ministry).label : ''}${v.search ? ` · “${esc(v.search)}”` : ''}</span>
         </button>
         <button class="sv-del" data-sv-del="${v.id}" type="button" aria-label="Excluir visão">✕</button>
       </div>`).join('') : '<div class="sv-empty">Nenhuma visão salva ainda.<br>Salve a combinação atual de filtros.</div>'}
@@ -1604,6 +1644,14 @@ function renderUsers() {
           <div class="perm-row"><span class="perm-ico role-admin">${SVG_SHIELD}</span><div><b>Administrador</b><span>Gerencia membros, exportações e usuários comuns nas unidades liberadas para ele. Pode ter acesso às duas unidades.</span></div></div>
           <div class="perm-row"><span class="perm-ico role-user">${SVG_PERSON}</span><div><b>Usuário</b><span>Vê e cadastra membros apenas nas unidades liberadas pelo administrador. Não gerencia contas de acesso.</span></div></div>
         </div>
+        <div class="panel">
+          <div class="panel-title">${SVG_PENCIL} Opções do cadastro
+            <span class="panel-link" style="cursor:default">Status e ministérios</span>
+          </div>
+          <p class="admin-hint opt-hint">Edite os nomes e as cores que aparecem em “Cadastrar novo membro”. Opções usadas por algum membro não podem ser removidas.</p>
+          <div id="opt-panel"></div>
+          <button class="btn btn-primary admin-submit" id="opt-save" type="button">Salvar opções</button>
+        </div>
       </div>
     </div>`;
   $('#acc-name').value = geralMode ? GENERAL_ADMIN.name : editing ? editing.name : '';
@@ -1621,6 +1669,116 @@ function renderUsers() {
   $('#acc-form').addEventListener('submit', submitUser);
   const cancel = $('#acc-cancel');
   if (cancel) cancel.addEventListener('click', () => { editingUserId = null; editingGeral = false; renderUsers(); });
+  draftOptions = cloneOptions({ statuses: statusList(), ministries: ministryList() });
+  renderOptionsPanel();
+  $('#opt-save').addEventListener('click', submitOptions);
+  $('#opt-panel').addEventListener('click', onOptionsPanelClick);
+}
+
+/* ═════════ Opções do cadastro (somente administradores) ═════════ */
+let draftOptions = null;
+function cloneOptions(o) { return { statuses: o.statuses.map(x => ({ ...x })), ministries: o.ministries.map(x => ({ ...x })) }; }
+const OPTION_GROUP_LABEL = { statuses: 'Status', ministries: 'Ministério' };
+const OPTION_PROTECTED = { statuses: 'ativo', ministries: 'nenhum' };
+
+function optionUsage(group, key) {
+  return members.filter(m => group === 'statuses' ? m.status === key : (m.ministry || 'nenhum') === key).length;
+}
+
+function optionRowsHTML(group) {
+  const items = draftOptions?.[group] || [];
+  const protectedKey = OPTION_PROTECTED[group];
+  return items.map(item => {
+    const used = optionUsage(group, item.key);
+    const locked = item.key === protectedKey || used > 0;
+    const reason = item.key === protectedKey ? 'Opção padrão do sistema' : used ? `Em uso por ${used} membro${used > 1 ? 's' : ''}` : 'Remover';
+    return `<div class="opt-row" data-opt-row="${esc(item.key)}">
+      <input type="color" data-opt-color value="${esc(item.color)}" aria-label="Cor de ${esc(item.label)}">
+      <input type="text" data-opt-label maxlength="40" value="${esc(item.label)}" aria-label="Nome de ${OPTION_GROUP_LABEL[group]}">
+      <span class="opt-use">${used ? `${used} membro${used > 1 ? 's' : ''}` : '—'}</span>
+      <button class="icon-btn del" type="button" data-opt-del="${group}" ${locked ? 'disabled' : ''} title="${esc(reason)}" aria-label="Remover ${esc(item.label)}">
+        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function renderOptionsPanel() {
+  const panel = $('#opt-panel');
+  if (!panel || !draftOptions) return;
+  panel.innerHTML = ['statuses', 'ministries'].map(group => `
+    <div class="opt-group" data-opt-group="${group}">
+      <div class="opt-group-head">
+        <b>${OPTION_GROUP_LABEL[group]}</b>
+        <button class="btn btn-ghost btn-sm" type="button" data-opt-add="${group}">＋ Adicionar</button>
+      </div>
+      <div class="opt-rows">${optionRowsHTML(group)}</div>
+    </div>`).join('');
+}
+
+function syncDraftFromDOM() {
+  if (!draftOptions) return;
+  $$('#opt-panel [data-opt-group]').forEach(groupEl => {
+    const group = groupEl.dataset.optGroup;
+    const rows = [...groupEl.querySelectorAll('.opt-row')];
+    draftOptions[group] = rows.map(row => ({
+      key: row.dataset.optRow,
+      label: row.querySelector('[data-opt-label]').value.trim(),
+      color: row.querySelector('[data-opt-color]').value
+    }));
+  });
+}
+
+function newOptionKey() {
+  return 'nw' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+function onOptionsPanelClick(e) {
+  const add = e.target.closest('[data-opt-add]');
+  if (add) {
+    syncDraftFromDOM();
+    const group = add.dataset.optAdd;
+    const palette = group === 'statuses' ? DEFAULT_STATUSES : DEFAULT_MINISTRIES;
+    draftOptions[group].push({ key: newOptionKey(), label: 'Nova opção', color: palette[0].color });
+    renderOptionsPanel();
+    const rows = $$(`#opt-panel [data-opt-group="${group}"] .opt-row`);
+    const last = rows[rows.length - 1]?.querySelector('[data-opt-label]');
+    if (last) { last.focus(); last.select(); }
+    return;
+  }
+  const del = e.target.closest('[data-opt-del]');
+  if (del) {
+    const group = del.dataset.optDel;
+    const row = del.closest('.opt-row');
+    if (!row || del.disabled) return;
+    syncDraftFromDOM();
+    draftOptions[group] = draftOptions[group].filter(item => item.key !== row.dataset.optRow);
+    renderOptionsPanel();
+  }
+}
+
+async function submitOptions() {
+  if (!draftOptions) return;
+  syncDraftFromDOM();
+  const empty = ['statuses', 'ministries'].find(g => draftOptions[g].some(item => !item.label));
+  if (empty) {
+    toast(`Preencha o nome de todas as opções de ${OPTION_GROUP_LABEL[empty].toLowerCase()}.`, { type: 'danger' });
+    return;
+  }
+  try {
+    const data = await API.call('/api/options', { options: draftOptions });
+    state.options = normalizeOptions(data.options);
+    renderAll();
+    toast('Opções do cadastro atualizadas.');
+  } catch (err) {
+    if (err.code === 'option_in_use') {
+      toast('Uma opção removida está em uso por membros. Altere esses membros antes de removê-la.', { type: 'danger' });
+    } else if (err.code === 'forbidden') {
+      toast('Seu acesso não permite editar as opções do cadastro.', { type: 'danger' });
+    } else {
+      toast('Não foi possível salvar as opções agora. Verifique a conexão e tente novamente.', { type: 'danger' });
+    }
+  }
 }
 
 function userFieldError(err) {
@@ -1917,7 +2075,7 @@ document.addEventListener('change', e => {
     const changed = members.filter(m => ids.includes(m.id));
     state.selected.clear(); renderAll();
     Promise.all(changed.map(syncMember)).then(results => {
-      if (results.every(Boolean)) toast(`Status de ${ids.length} membro${ids.length > 1 ? 's' : ''} alterado para “${STATUS[st].label}”.`);
+      if (results.every(Boolean)) toast(`Status de ${ids.length} membro${ids.length > 1 ? 's' : ''} alterado para “${statusInfo(st).label}”.`);
       else refreshState(true);
     });
   }

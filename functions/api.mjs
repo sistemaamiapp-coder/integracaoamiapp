@@ -10,8 +10,26 @@ import {
 const GENERAL_EMAIL = 'werleyvenceslau17@gmail.com';
 const GENERAL_NAME = 'Werley Venceslau';
 const UNITS = ['pacheco', 'amendoeira'];
-const STATUSES = ['ativo', 'integracao', 'visitante'];
-const MINISTRIES = ['louvor', 'midia', 'recepcao', 'infantil', 'intercessao', 'diaconia', 'jovens', 'nenhum'];
+const OPTIONS_ID = 'member_options';
+const OPTION_KEY_RE = /^[a-z0-9_-]{1,32}$/;
+const COLOR_RE = /^#[0-9a-f]{6}$/i;
+const DEFAULT_OPTIONS = {
+  statuses: [
+    { key: 'ativo', label: 'Ativo', color: '#2ECC71' },
+    { key: 'integracao', label: 'Em integração', color: '#FFB020' },
+    { key: 'visitante', label: 'Visitante', color: '#3D8BFD' },
+  ],
+  ministries: [
+    { key: 'louvor', label: 'Louvor', color: '#FF3B52' },
+    { key: 'midia', label: 'Mídia', color: '#3D8BFD' },
+    { key: 'recepcao', label: 'Recepção', color: '#FFB020' },
+    { key: 'infantil', label: 'Infantil', color: '#2ECC71' },
+    { key: 'intercessao', label: 'Intercessão', color: '#9B6BFF' },
+    { key: 'diaconia', label: 'Diaconia', color: '#2BD9E8' },
+    { key: 'jovens', label: 'Jovens', color: '#F04BD8' },
+    { key: 'nenhum', label: 'Sem ministério', color: '#B79A9A' },
+  ],
+};
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -85,13 +103,71 @@ function validPassword(raw) {
   return raw;
 }
 
+// ---------- Opções do cadastro (status e ministérios editáveis) ----------
+function cleanOptionList(raw, { min, max, requiredKey }) {
+  if (!Array.isArray(raw) || raw.length < min || raw.length > max) return null;
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return null;
+    const key = String(item.key || '');
+    if (!OPTION_KEY_RE.test(key) || seen.has(key)) return null;
+    seen.add(key);
+    const label = text(item.label, 40);
+    if (!label) return null;
+    const color = COLOR_RE.test(String(item.color || '')) ? String(item.color).toLowerCase() : '#b79a9a';
+    out.push({ key, label, color });
+  }
+  if (requiredKey && !seen.has(requiredKey)) return null;
+  return out;
+}
+
+function cleanOptions(raw) {
+  const source = typeof raw === 'string' ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
+  if (!source || typeof source !== 'object') return null;
+  const statuses = cleanOptionList(source.statuses, { min: 1, max: 20, requiredKey: 'ativo' });
+  const ministries = cleanOptionList(source.ministries, { min: 2, max: 30, requiredKey: 'nenhum' });
+  if (!statuses || !ministries) return null;
+  return { statuses, ministries };
+}
+
+async function readOptions(db) {
+  try {
+    const found = rows(await db.from('ami_settings').select('id,value').eq('id', OPTIONS_ID).limit(1));
+    if (found.length) {
+      const parsed = cleanOptions(found[0].value);
+      if (parsed) return parsed;
+    }
+  } catch { /* tabela ainda ausente: usa padrões */ }
+  return DEFAULT_OPTIONS;
+}
+
+async function saveOptions(db, actor, request) {
+  if (!canManage(actor)) return errorJson('forbidden', 403);
+  const body = await readJson(request);
+  const options = cleanOptions(body?.options);
+  if (!options) throw new AppError('invalid_input', 400);
+  const all = rows(await db.from('ami_members').select('id,status,ministry'));
+  const statusKeys = new Set(options.statuses.map((s) => s.key));
+  const ministryKeys = new Set(options.ministries.map((m) => m.key));
+  const inUse = all.some((row) => !statusKeys.has(row.status) || !ministryKeys.has(row.ministry || 'nenhum'));
+  if (inUse) throw new AppError('option_in_use', 409);
+  const existing = rows(await db.from('ami_settings').select('id').eq('id', OPTIONS_ID).limit(1));
+  if (existing.length) {
+    rows(await db.from('ami_settings').update({ value: options, updated_at: nowIso() }).eq('id', OPTIONS_ID).select('id'));
+  } else {
+    rows(await db.from('ami_settings').insert({ id: OPTIONS_ID, value: options, updated_at: nowIso() }).select('id'));
+  }
+  return json({ options });
+}
+
 function readUnits(input, actor) {
   const allowed = unitsOfRow(actor);
   const picked = Array.isArray(input) ? input.filter((u) => allowed.includes(u)) : [];
   return [...new Set(picked)];
 }
 
-function readMember(body, actor) {
+function readMember(body, actor, options) {
   const source = body?.member;
   if (!source || typeof source !== 'object') throw new AppError('invalid_input', 400);
   const id = text(source.id, 64);
@@ -100,8 +176,8 @@ function readMember(body, actor) {
   if (!name) throw new AppError('invalid_input', 400);
   const unit = text(source.unit, 20);
   if (!unitsOfRow(actor).includes(unit)) throw new AppError('unit_forbidden', 403);
-  const status = STATUSES.includes(source.status) ? source.status : 'ativo';
-  const ministry = MINISTRIES.includes(source.ministry) ? source.ministry : 'nenhum';
+  const status = options.statuses.some((s) => s.key === source.status) ? source.status : 'ativo';
+  const ministry = options.ministries.some((m) => m.key === source.ministry) ? source.ministry : 'nenhum';
   const birth = DATE_RE.test(source.birth || '') ? source.birth : '';
   const joined = DATE_RE.test(source.joined || '') ? source.joined : '';
   const email = text(source.email, 120);
@@ -155,7 +231,7 @@ async function stateFor(db, actor) {
     .map(publicMember)
     .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
 
-  return { user: publicUser(actor), users, members };
+  return { user: publicUser(actor), users, members, options: await readOptions(db) };
 }
 
 async function issueSession(db, row) {
@@ -346,7 +422,7 @@ async function changeOwnPassword(db, actor, request) {
 
 async function upsertMember(db, actor, request) {
   const body = await readJson(request);
-  const member = readMember(body, actor);
+  const member = readMember(body, actor, await readOptions(db));
   const existing = rows(await db.from('ami_members').select('id,unit').eq('id', member.id).limit(1));
 
   if (existing.length) {
@@ -395,8 +471,9 @@ async function importLegacy(db, actor, request) {
   let members = 0;
   if (legacyMembers.length) {
     const payload = [];
+    const options = await readOptions(db);
     for (const item of legacyMembers) {
-      try { payload.push(readMember({ member: item }, actor)); } catch { /* linha inválida é ignorada */ }
+      try { payload.push(readMember({ member: item }, actor, options)); } catch { /* linha inválida é ignorada */ }
     }
     if (payload.length) {
       const created = rows(await db.from('ami_members').insert(payload.map((m) => ({
@@ -466,6 +543,7 @@ export function createApplication({ db }) {
       if (path === '/api/me/password' && request.method === 'POST') return await changeOwnPassword(db, me, request);
       if (path === '/api/members' && request.method === 'POST') return await upsertMember(db, me, request);
       if (path === '/api/members/delete' && request.method === 'POST') return await deleteMembers(db, me, request);
+      if (path === '/api/options' && request.method === 'POST') return await saveOptions(db, me, request);
       if (path === '/api/import' && request.method === 'POST') return await importLegacy(db, me, request);
 
       if (path === '/api/users' && request.method === 'POST') {
